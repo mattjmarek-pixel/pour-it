@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Recipe } from '@/src/data/recipes';
 
+const STREAM_TIMEOUT_MS = 30_000;
+
 interface AIPanelProps {
   visible: boolean;
   recipe: Recipe | null;
@@ -27,6 +29,10 @@ interface AIPanelProps {
 export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const skeletonAnim = useRef(new Animated.Value(0.3)).current;
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [prompt, setPrompt] = useState('Make this drink more tropical');
   const [streaming, setStreaming] = useState(false);
   const [response, setResponse] = useState('');
@@ -41,11 +47,25 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
     }).start();
 
     if (!visible) {
+      abortControllerRef.current?.abort();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setResponse('');
       setError('');
       setStreaming(false);
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!streaming) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(skeletonAnim, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [streaming]);
 
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -65,6 +85,13 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
     setResponse('');
     setError('');
 
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
+    timeoutRef.current = setTimeout(() => {
+      abortControllerRef.current?.abort();
+    }, STREAM_TIMEOUT_MS);
+
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
       const url = `https://${domain}/api/claude-stream`;
@@ -76,15 +103,28 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
           Accept: 'text/event-stream',
         },
         body: JSON.stringify({ recipe, prompt }),
+        signal: signal as AbortSignal,
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (res.status === 429) {
+        setError("We're getting a lot of requests right now. Please try again in a moment.");
+        return;
+      }
+
+      if (!res.ok) {
+        setError(`Something went wrong (${res.status}). Tap to retry.`);
+        return;
+      }
 
       const reader = res.body?.getReader();
-      if (!reader) throw new Error('No reader');
+      if (!reader) {
+        setError('Something went wrong. Tap to retry.');
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedAny = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -98,27 +138,46 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
           if (data === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.content) {
-              setResponse((prev) => prev + parsed.content);
-            }
-          } catch {}
+          if (data.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(data) as { content?: string; error?: string };
+              if (parsed.error) {
+                setError(parsed.error);
+                return;
+              }
+              if (parsed.content) {
+                receivedAny = true;
+                setResponse((prev) => prev + parsed.content);
+              }
+            } catch {}
+          }
         }
       }
+
+      if (!receivedAny) {
+        setError('No response received. Tap to retry.');
+      }
     } catch (err) {
-      setError('Unable to connect. Please check your connection and try again.');
+      const e = err as Error;
+      if (e.name === 'AbortError') {
+        if (signal.aborted) {
+          setError('Request timed out after 30 seconds. Tap to retry.');
+        }
+      } else {
+        setError('Unable to connect. Check your connection and tap to retry.');
+      }
     } finally {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setStreaming(false);
     }
   };
 
-  if (!visible && slideAnim._value === 0) return null;
+  if (!visible && (slideAnim as unknown as { _value: number })._value === 0) return null;
 
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: visible ? 'auto' : 'none' }]}>
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close AI panel" />
       </Animated.View>
 
       <Animated.View
@@ -140,7 +199,12 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
               <Text style={[styles.panelSubtitle, { color: accentColor }]}>{recipe.name}</Text>
             )}
           </View>
-          <Pressable style={styles.closeBtn} onPress={onClose}>
+          <Pressable
+            style={styles.closeBtn}
+            onPress={onClose}
+            accessibilityLabel="Close"
+            accessibilityRole="button"
+          >
             <Feather name="x" size={18} color="rgba(255,255,255,0.5)" />
           </Pressable>
         </View>
@@ -154,6 +218,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
             placeholderTextColor="rgba(255,255,255,0.25)"
             multiline
             maxLength={200}
+            accessibilityLabel="Customization prompt"
           />
         </View>
 
@@ -162,13 +227,20 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
             styles.generateBtn,
             { backgroundColor: streaming ? `${accentColor}66` : accentColor },
           ]}
-          onPress={handleStream}
+          onPress={error ? handleStream : handleStream}
           disabled={streaming}
+          accessibilityLabel={streaming ? 'Generating recipe variation' : 'Generate variation'}
+          accessibilityRole="button"
         >
           {streaming ? (
             <>
               <Feather name="loader" size={15} color="#0A0A0F" />
               <Text style={styles.generateBtnText}>Creating magic...</Text>
+            </>
+          ) : error ? (
+            <>
+              <Feather name="refresh-cw" size={15} color="#0A0A0F" />
+              <Text style={styles.generateBtnText}>Retry</Text>
             </>
           ) : (
             <>
@@ -177,6 +249,15 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
             </>
           )}
         </Pressable>
+
+        {streaming && !response && (
+          <View style={styles.skeletonContainer}>
+            <Animated.View style={[styles.skeletonLine, { opacity: skeletonAnim, width: '90%' }]} />
+            <Animated.View style={[styles.skeletonLine, { opacity: skeletonAnim, width: '75%' }]} />
+            <Animated.View style={[styles.skeletonLine, { opacity: skeletonAnim, width: '85%' }]} />
+            <Animated.View style={[styles.skeletonLine, { opacity: skeletonAnim, width: '60%' }]} />
+          </View>
+        )}
 
         {(response || error) && (
           <ScrollView style={styles.responseContainer} showsVerticalScrollIndicator={false}>
@@ -238,9 +319,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -267,11 +348,23 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     paddingVertical: 14,
     marginBottom: 18,
+    minHeight: 44,
   },
   generateBtnText: {
     fontFamily: 'DMSans_600SemiBold',
     fontSize: 15,
     color: '#0A0A0F',
+  },
+  skeletonContainer: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+  },
+  skeletonLine: {
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   responseContainer: {
     maxHeight: 280,

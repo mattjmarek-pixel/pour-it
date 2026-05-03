@@ -1,0 +1,118 @@
+You are working on PourIt, an AI-powered drink recipe discovery app (Expo/React Native monorepo with pnpm workspaces). Please fix all of the following issues to make the app run smoothly and deliver the best possible user experience.
+
+---
+
+## 1. Fix the Camera / Scan Feature
+
+The headline feature — tap-to-scan bottle label recognition — currently falls back to random product discovery because expo-camera fails to resolve in the pnpm workspace.
+
+- Resolve the Metro bundler issue with expo-camera in the pnpm workspace. The fix is typically adding a `metro.config.js` in `artifacts/pour-it/` that uses `getDefaultConfig` and sets `resolver.nodeModulesPaths` to include the root `node_modules`, OR by hoisting `expo-camera` to the root workspace.
+- If label recognition via a vision API (e.g. Google Cloud Vision, AWS Rekognition, or the Anthropic Vision API) is not yet implemented, implement a working camera flow: open the camera, capture a photo of a bottle, send the image to the API server, have the server use the Anthropic API with vision capabilities to identify the bottle and return a matching product from the recipe data, then display the corresponding recipes.
+- If a vision API call fails or no match is found, show a friendly "Couldn't identify this bottle — try browsing instead" message rather than a random result.
+- Remove all references to "simulated" or "random" product discovery from comments and the replit.md notes.
+
+---
+
+## 2. Fix Animations: Enable useNativeDriver
+
+All animations currently use `useNativeDriver: false` for web compatibility, which severely degrades performance on native devices.
+
+- Audit every `Animated` call in the codebase (especially in `ScanView.tsx`, `ProductGrid.tsx`, `RecipeList.tsx`, `AIPanel.tsx`).
+- Switch all transform and opacity animations to `useNativeDriver: true`. These are the only properties that support native driver and they are already the ones being animated (fade-in, slide, scale).
+- For any layout animations (width, height, top, left, backgroundColor) that cannot use native driver, either eliminate them, replace them with transform equivalents, or install and use `react-native-reanimated` (which handles both native and JS animations cleanly and is already compatible with Expo SDK 54).
+- Do not break web compatibility if web is a real target — use `Platform.OS` guards or Reanimated's unified API.
+
+---
+
+## 3. Add AI Stream Error Handling
+
+The SSE streaming from Claude in `AIPanel.tsx` has no error recovery.
+
+- Add a timeout (30 seconds) — if no tokens arrive within 30s, show an error state.
+- Handle mid-stream failures: if the EventSource or fetch stream errors or closes unexpectedly before `[DONE]`, show: "Something went wrong. Tap to retry."
+- Add a visible retry button that re-triggers the same request.
+- Handle Anthropic API rate limit / 429 responses gracefully with a user-friendly message: "We're getting a lot of requests right now. Please try again in a moment."
+- Show a subtle loading skeleton or pulsing placeholder while the first tokens are streaming in, so the panel doesn't appear blank.
+- Ensure the streaming connection is properly cleaned up (EventSource closed / AbortController aborted) when the AIPanel is dismissed.
+
+---
+
+## 4. Fix Dependency Scoping: Move @replit/connectors-sdk
+
+The root `package.json` lists `@replit/connectors-sdk` as a root-level dependency, which is incorrect and makes the project non-portable.
+
+- Move `@replit/connectors-sdk` from the root `package.json` `dependencies` to the `artifacts/api-server/package.json` where it is actually used.
+- Run `pnpm install` after making this change.
+- Verify the API server still builds and starts correctly.
+
+---
+
+## 5. Add Basic CI with GitHub Actions
+
+There is no automated checking on the codebase.
+
+- Create `.github/workflows/ci.yml` that runs on push and pull_request to `main`.
+- The workflow should: install pnpm, run `pnpm install --frozen-lockfile`, run `pnpm typecheck`, and run `pnpm build`.
+- Use Node.js 20 and cache pnpm's store for faster runs.
+
+---
+
+## 6. Add Core Tests
+
+There are zero tests in the repo. Add a meaningful baseline.
+
+- Install `jest` and `@testing-library/react-native` in `artifacts/pour-it/`.
+- Write tests for:
+  - `src/data/recipes.ts` — verify all 3 modes exist, each has 6 products, each product has exactly 3 recipes, and no recipe has an empty name or empty ingredients array.
+  - `context/SavedRecipesContext.tsx` — verify that saving a recipe persists it, unsaving removes it, and the context initializes correctly from AsyncStorage.
+  - `components/AIPanel.tsx` — verify it shows a loading state initially and renders streamed text when tokens arrive.
+- Install `jest` in `artifacts/api-server/` and write a test for `POST /api/claude-stream` that mocks the Anthropic SDK and verifies it returns `Content-Type: text/event-stream` and writes SSE events.
+- Add `"test": "jest"` scripts to each artifact's `package.json` and add `pnpm -r run test` to the CI workflow.
+
+---
+
+## 7. Fix TypeScript Config
+
+- In the root `tsconfig.base.json`, change `typescript` from `~5.9.2` to `^5.8.0` for predictable minor-version resolution across the monorepo, OR pin to an exact version like `5.8.3`.
+- Ensure all artifact `tsconfig.json` files extend `../../tsconfig.base.json` (or `../tsconfig.base.json` as appropriate) and have `composite: true` and `declaration: true` set for proper project references.
+- Run `pnpm typecheck` and fix all TypeScript errors that surface.
+
+---
+
+## 8. Improve README
+
+The current README is minimal and does not help a developer get started.
+
+- Expand `README.md` to include:
+  - Prerequisites (Node 20+, pnpm 9+, Expo Go app on device)
+  - Step-by-step local setup: `pnpm install`, how to set required env vars (`AI_INTEGRATIONS_ANTHROPIC_API_KEY`, `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `EXPO_PUBLIC_DOMAIN`, `SESSION_SECRET`), how to start the API server, how to start the Expo app
+  - A note that the app is designed to run on Replit but can be run locally with the above steps
+  - Architecture overview (already in replit.md — move the key parts here)
+  - How the AI streaming works
+  - Known limitations / roadmap
+
+---
+
+## 9. UX Polish
+
+- In the Saved tab, if no recipes are saved yet, show an empty state illustration and copy: "Nothing saved yet — browse recipes and tap ♥ to save your favorites."
+- In the ProductGrid, add a subtle skeleton loader (grey pulsing placeholder cards) while products are loading instead of a blank screen.
+- In the RecipeList, make the expand/collapse animation smoother — use `LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)` before toggling the expanded state.
+- Add haptic feedback (`expo-haptics`) on: saving a recipe, scanning a bottle, and switching modes. Keep it subtle (light impact).
+- Ensure all tappable elements have a minimum touch target of 44×44pt (per Apple HIG / Android guidelines).
+
+---
+
+## 10. Accessibility
+
+- Add `accessibilityLabel` and `accessibilityHint` props to all icon buttons (save/unsave, scan, mode tabs).
+- Ensure color contrast ratios meet WCAG AA for all text on the dark background.
+- Add `accessible={true}` and `accessibilityRole` to interactive cards and list items.
+
+---
+
+After completing all changes:
+1. Run `pnpm typecheck` — it must pass with zero errors.
+2. Run `pnpm -r run test` — all tests must pass.
+3. Start the API server and Expo app and verify the full user flow works: mode selection → scan (camera opens) → product grid → recipe list → AI customization panel (streaming works) → save recipe → view in Saved tab.
+4. Update `replit.md` to remove all "broken" / "workaround" notes and replace them with accurate descriptions of how things now work.

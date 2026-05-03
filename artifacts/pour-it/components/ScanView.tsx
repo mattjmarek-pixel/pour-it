@@ -1,7 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Platform,
   Pressable,
@@ -28,19 +30,20 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
   const opacityAnim = useRef(new Animated.Value(0.6)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const [scanning, setScanning] = useState(false);
+  const [scanState, setScanState] = useState<'idle' | 'scanning' | 'nomatch' | 'error'>('idle');
 
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(pulseAnim, { toValue: 1.03, duration: 1400, useNativeDriver: false }),
-          Animated.timing(opacityAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
-          Animated.timing(glowAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
+          Animated.timing(pulseAnim, { toValue: 1.03, duration: 1400, useNativeDriver: true }),
+          Animated.timing(opacityAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
         ]),
         Animated.parallel([
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1400, useNativeDriver: false }),
-          Animated.timing(opacityAnim, { toValue: 0.45, duration: 1400, useNativeDriver: false }),
-          Animated.timing(glowAnim, { toValue: 0, duration: 1400, useNativeDriver: false }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+          Animated.timing(opacityAnim, { toValue: 0.45, duration: 1400, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0, duration: 1400, useNativeDriver: true }),
         ]),
       ])
     );
@@ -48,16 +51,85 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
     return () => pulse.stop();
   }, []);
 
-  const handleTapScan = () => {
+  const handleTapScan = async () => {
     if (scanning) return;
+
+    if (Platform.OS === 'web') {
+      setScanState('scanning');
+      setScanning(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setTimeout(() => {
+        const products = PRODUCTS[mode];
+        const random = products[Math.floor(Math.random() * products.length)];
+        onProductFound(random);
+        setScanning(false);
+        setScanState('idle');
+      }, 800);
+      return;
+    }
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Camera Access Needed',
+        'Please allow camera access in Settings to scan bottle labels.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.5,
+      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    });
+
+    if (result.canceled) return;
+
     setScanning(true);
+    setScanState('scanning');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTimeout(() => {
-      const products = PRODUCTS[mode];
-      const random = products[Math.floor(Math.random() * products.length)];
-      onProductFound(random);
+
+    try {
+      const asset = result.assets[0];
+      const imageBase64 = asset.base64;
+      if (!imageBase64) throw new Error('No image data');
+
+      const productHints = PRODUCTS[mode].map((p) => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+      }));
+
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const res = await fetch(`https://${domain}/api/identify-bottle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, products: productHints }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = (await res.json()) as { productId: string | null };
+
+      if (data.productId) {
+        const product = PRODUCTS[mode].find((p) => p.id === data.productId);
+        if (product) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          onProductFound(product);
+          setScanState('idle');
+          return;
+        }
+      }
+
+      setScanState('nomatch');
+    } catch {
+      setScanState('error');
+    } finally {
       setScanning(false);
-    }, 600);
+    }
   };
 
   const categories = CATEGORIES[mode];
@@ -87,36 +159,49 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
           <Pressable
             style={[styles.viewfinder, { borderColor: accentColor }]}
             onPress={handleTapScan}
+            accessibilityLabel="Scan bottle label"
+            accessibilityHint="Opens camera to identify the bottle and find matching recipes"
+            accessibilityRole="button"
           >
             <View style={styles.scanInner}>
-              {scanning ? (
+              {scanState === 'scanning' ? (
                 <>
-                  <Animated.View
-                    style={[
-                      styles.scanLine,
-                      { backgroundColor: accentColor },
-                    ]}
-                  />
-                  <Text style={[styles.scanningText, { color: accentColor }]}>
-                    Scanning...
+                  <Animated.View style={[styles.scanLine, { backgroundColor: accentColor }]} />
+                  <Text style={[styles.scanningText, { color: accentColor }]}>Identifying...</Text>
+                  <Text style={styles.tapSub}>Analyzing bottle label</Text>
+                </>
+              ) : scanState === 'nomatch' ? (
+                <>
+                  <View style={[styles.scanIcon, { borderColor: 'rgba(255,255,255,0.3)' }]}>
+                    <Feather name="alert-circle" size={32} color="rgba(255,255,255,0.5)" />
+                  </View>
+                  <Text style={[styles.tapText, { color: 'rgba(255,255,255,0.7)' }]}>
+                    No match found
                   </Text>
+                  <Text style={styles.tapSub}>
+                    Couldn't identify this bottle — try browsing instead
+                  </Text>
+                  <Text style={[styles.retryHint, { color: accentColor }]}>Tap to try again</Text>
+                </>
+              ) : scanState === 'error' ? (
+                <>
+                  <View style={[styles.scanIcon, { borderColor: '#EF4444' }]}>
+                    <Feather name="wifi-off" size={32} color="#EF4444" />
+                  </View>
+                  <Text style={[styles.tapText, { color: '#EF4444' }]}>Connection failed</Text>
+                  <Text style={styles.tapSub}>Check your connection and tap to retry</Text>
                 </>
               ) : (
                 <>
                   <View style={[styles.scanIcon, { borderColor: accentColor }]}>
                     <Feather name="camera" size={32} color={accentColor} />
                   </View>
-                  <Text style={[styles.tapText, { color: accentColor }]}>
-                    Tap to Scan
-                  </Text>
-                  <Text style={styles.tapSub}>
-                    Point at bottle label or barcode
-                  </Text>
+                  <Text style={[styles.tapText, { color: accentColor }]}>Tap to Scan</Text>
+                  <Text style={styles.tapSub}>Point at bottle label to identify it</Text>
                 </>
               )}
             </View>
 
-            {/* Corner brackets */}
             <View style={[styles.corner, styles.topLeft, { borderColor: accentColor }]} />
             <View style={[styles.corner, styles.topRight, { borderColor: accentColor }]} />
             <View style={[styles.corner, styles.bottomLeft, { borderColor: accentColor }]} />
@@ -151,15 +236,15 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
               Haptics.selectionAsync();
               onCategorySelected(cat);
             }}
+            accessibilityLabel={`Browse ${cat} category`}
+            accessibilityRole="button"
           >
             <Text style={[styles.chipText, { color: accentColor }]}>{cat}</Text>
           </Pressable>
         ))}
       </ScrollView>
 
-      <Text style={styles.browseAll}>
-        Or tap any category above to browse all products
-      </Text>
+      <Text style={styles.browseAll}>Or tap any category above to browse all products</Text>
     </ScrollView>
   );
 }
@@ -228,6 +313,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.35)',
     textAlign: 'center',
+  },
+  retryHint: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 13,
+    marginTop: 4,
   },
   scanLine: {
     width: '80%',
@@ -300,6 +390,8 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 100,
     borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   chipText: {
     fontFamily: 'DMSans_500Medium',

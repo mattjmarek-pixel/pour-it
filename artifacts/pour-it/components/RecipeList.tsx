@@ -3,17 +3,23 @@ import * as Haptics from 'expo-haptics';
 import React, { useRef, useState } from 'react';
 import {
   Animated,
+  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppMode, Recipe, Product } from '@/src/data/recipes';
 import { useSavedRecipes } from '@/context/SavedRecipesContext';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: '#10B981',
@@ -34,23 +40,13 @@ interface RecipeCardProps {
 function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, onCustomizeAI }: RecipeCardProps) {
   const { saveRecipe, unsaveRecipe, isRecipeSaved } = useSavedRecipes();
   const saved = isRecipeSaved(recipe.id);
-  const expandAnim = useRef(new Animated.Value(isExpanded ? 1 : 0)).current;
   const scale = useRef(new Animated.Value(1)).current;
 
   const toggle = () => {
     Haptics.selectionAsync();
-    Animated.spring(expandAnim, {
-      toValue: isExpanded ? 0 : 1,
-      useNativeDriver: false,
-      bounciness: 4,
-    }).start();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     onToggle();
   };
-
-  const maxHeight = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 500],
-  });
 
   return (
     <Animated.View
@@ -66,6 +62,9 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
         onPress={toggle}
         onPressIn={() => Animated.spring(scale, { toValue: 0.98, useNativeDriver: true }).start()}
         onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        accessibilityLabel={`${recipe.name}, ${recipe.difficulty}, ${recipe.time}. ${isExpanded ? 'Tap to collapse' : 'Tap to expand'}`}
+        accessibilityRole="button"
+        accessible
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
@@ -95,12 +94,15 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 saved ? unsaveRecipe(recipe.id) : saveRecipe(recipe, product, mode);
               }}
+              style={styles.heartBtn}
+              accessibilityLabel={saved ? 'Remove from saved' : 'Save recipe'}
+              accessibilityRole="button"
+              accessibilityHint={saved ? 'Removes this recipe from your saved list' : 'Saves this recipe to your collection'}
             >
               <Feather
                 name="heart"
                 size={20}
                 color={saved ? '#EF4444' : 'rgba(255,255,255,0.35)'}
-                style={{ marginBottom: 12 }}
               />
             </Pressable>
             <Feather
@@ -114,7 +116,7 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
         <Text style={styles.description}>{recipe.description}</Text>
       </Pressable>
 
-      <Animated.View style={{ maxHeight, overflow: 'hidden' }}>
+      {isExpanded && (
         <View style={[styles.expandedContent, { borderTopColor: `${accentColor}30` }]}>
           <Text style={[styles.sectionTitle, { color: accentColor }]}>Ingredients</Text>
           {recipe.ingredients.map((ing, i) => (
@@ -138,12 +140,14 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onCustomizeAI(recipe);
             }}
+            accessibilityLabel="Customize this recipe with AI"
+            accessibilityRole="button"
           >
             <Feather name="zap" size={15} color="#0A0A0F" />
             <Text style={styles.aiBtnText}>Customize with AI</Text>
           </Pressable>
         </View>
-      </Animated.View>
+      )}
     </Animated.View>
   );
 }
@@ -163,7 +167,12 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
   return (
     <View style={[styles.container, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={onBack}>
+        <Pressable
+          style={styles.backBtn}
+          onPress={onBack}
+          accessibilityLabel="Go back to products"
+          accessibilityRole="button"
+        >
           <Feather name="chevron-left" size={22} color="rgba(255,255,255,0.7)" />
         </Pressable>
         <View style={styles.headerInfo}>
@@ -211,9 +220,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -263,6 +272,14 @@ const styles = StyleSheet.create({
   cardActions: {
     alignItems: 'flex-end',
     paddingLeft: 10,
+    gap: 4,
+  },
+  heartBtn: {
+    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recipeName: {
     fontFamily: 'PlayfairDisplay_700Bold',
@@ -371,6 +388,7 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     paddingVertical: 13,
     marginTop: 20,
+    minHeight: 44,
   },
   aiBtnText: {
     fontFamily: 'DMSans_600SemiBold',
