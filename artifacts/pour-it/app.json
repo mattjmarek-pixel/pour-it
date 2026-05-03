@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "PourIt",
+    "slug": "pour-it",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "pour-it",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "PourIt uses your camera to scan bottle barcodes and product labels to find matching recipes.",
+        "NSPhotoLibraryUsageDescription": "PourIt can access your photo library to scan labels from saved images."
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PourIt uses your camera to scan bottle barcodes and labels to instantly find matching recipes."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

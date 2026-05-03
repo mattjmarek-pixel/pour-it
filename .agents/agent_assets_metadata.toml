@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "bqHM3rvOEEK6KIfBOpHGe"
+uri = "file://artifacts/pour-it/assets/images/icon.png"
+type = "image"
+title = "pourit app icon"
+
+[[generated]]
+id = "dAlZOmAaR4cU8HFgvwjUm"
+uri = "file://artifacts/pour-it/assets/images/spirits_hero.png"
+type = "image"
+title = "spirits hero banner"
+
+[[generated]]
+id = "7njx8bOFCMZ6s1D4ekfIw"
+uri = "file://artifacts/pour-it/assets/images/thc_hero.png"
+type = "image"
+title = "thc hero banner"
+
+[[generated]]
+id = "ZCs3Eo8AZe-_D9baPmE3r"
+uri = "file://artifacts/pour-it/assets/images/mocktail_hero.png"
+type = "image"
+title = "mocktail hero banner"

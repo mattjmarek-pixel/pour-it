@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "PourIt"
+version = "1.0.0"
+id = "artifacts/pour-it"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 24565
+
+[services.development]
+run = "pnpm --filter @workspace/pour-it run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pour-it", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/pour-it", "run", "serve" ]
+
+[services.env]
+PORT = "24565"
+BASE_PATH = "/"

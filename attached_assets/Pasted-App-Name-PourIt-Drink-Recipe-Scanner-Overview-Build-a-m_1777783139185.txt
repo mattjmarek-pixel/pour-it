@@ -1,0 +1,284 @@
+App Name: PourIt — Drink Recipe Scanner
+Overview:
+Build a mobile-first React web app called PourIt that lets users scan or select a bottle/product and instantly get a curated list of drink recipes. The app supports three modes: Spirits (alcoholic), THC-infused beverages, and Mocktails. The design should feel premium, modern, and exciting — like a high-end cocktail bar met a sleek consumer app.
+
+Tech Stack:
+
+React + Vite
+Tailwind CSS
+Framer Motion (animations)
+Google Fonts: "Playfair Display" for headings, "DM Sans" for body
+No backend required — all recipe data is hardcoded in a JSON file
+
+
+Design Direction:
+
+Dark theme: deep near-black background (#0A0A0F), with rich amber/gold accents (#D4A843) for spirits mode, purple/violet (#7C3AED) for THC mode, and emerald green (#10B981) for mocktail mode
+Each mode has its own accent color that flows through buttons, active states, card borders, and gradients
+Full-bleed hero section at the top with a subtle animated gradient mesh background that shifts based on active mode
+Cards use frosted glass effect (backdrop-blur, semi-transparent dark backgrounds, thin colored borders)
+Smooth page transitions and card entrance animations using Framer Motion
+Typography is bold and editorial — large display text, tight letter spacing on headings
+Bottom tab navigation for the three modes with animated indicator
+
+
+Core Features:
+
+Mode Switcher (Bottom Nav)
+
+Three tabs: Spirits 🍸 | THC 🌿 | Mocktails 🧃
+Animated sliding indicator under active tab
+Switching modes triggers a smooth crossfade transition and changes the app's accent color globally
+
+
+Scan Screen (Home)
+
+Large animated "scan zone" in the center — a pulsing rounded rectangle with a corner-bracket frame effect (like a camera viewfinder)
+Below the scan zone: "Or browse by category" section showing product category chips (Vodka, Rum, Gin, Tequila, Bourbon, etc. — changes per mode)
+Tapping either the scan zone or a chip goes to the product selection screen
+
+
+Product Selection Screen
+
+Grid of product cards (2 columns), each with a large emoji, product name, and brand
+Cards animate in with a staggered entrance (Framer Motion)
+Selected card gets a glowing accent-colored border
+
+
+Recipe List Screen
+
+Header shows selected product name and a "Change product" back link
+Recipe cards in a vertical list, each showing: recipe name, difficulty badge, time estimate, and flavor tags
+Tapping a card expands it inline (accordion) with smooth height animation revealing: full ingredient list, numbered steps, and a "Customize with AI" button
+"Customize with AI" calls the Anthropic API (claude-sonnet-4-20250514) asking for a personalized variation of the recipe based on the product
+
+
+AI Customization Panel
+
+Slides up from the bottom as a modal sheet when "Customize with AI" is tapped
+Shows a text input pre-filled with a prompt like "Make this drink more tropical" — user can edit
+Streaming response from Claude renders word by word in the panel
+Panel has a frosted glass dark background with the mode's accent color border glow
+
+
+Saved Recipes (optional tab)
+
+Heart icon on each recipe card saves it to localStorage
+Saved tab shows saved recipes across all modes
+
+
+
+
+Recipe Data (hardcode in /src/data/recipes.js):
+Include at minimum:
+
+Spirits: Svedka Vodka, Captain Morgan, Tanqueray Gin, Jose Cuervo, Bulleit Bourbon, Bacardi Rum — 3 recipes each
+THC: Wynk Seltzer, Cann Social Tonic, Delta 9 Syrup, Kiva Camino Drops, Keef Sparkling, Olala Soda — 3 recipes each
+Mocktails: Seedlip Spice 94, Fever-Tree Mixers, Lyre's Spirits, Monin Syrup, Fresh Pressed Juices, Sparkling Water — 3 recipes each
+
+Each recipe object should have: name, difficulty (easy/medium/hard), time, tags (array), ingredients (array), steps (array), description (one sentence)
+
+Anthropic API Integration:
+
+Store the API key in a .env file as VITE_ANTHROPIC_API_KEY
+Call https://api.anthropic.com/v1/messages from the frontend
+Model: claude-sonnet-4-20250514
+System prompt: "You are a creative mixologist. Given a drink recipe and a user's customization request, suggest a personalized variation with modified ingredients and steps. Be specific, fun, and concise. Format your response with a new recipe name, ingredient list, and steps."
+Stream the response and render it token by token in the AI panel
+
+
+File Structure:
+/src
+  /components
+    BottomNav.jsx
+    ScanScreen.jsx
+    ProductGrid.jsx
+    RecipeList.jsx
+    RecipeCard.jsx
+    AIPanel.jsx
+    SavedRecipes.jsx
+  /data
+    recipes.js
+  /hooks
+    useModeTheme.js
+    useSavedRecipes.js
+  App.jsx
+  main.jsx
+  index.css
+
+Animations to include (Framer Motion):
+
+Mode switch: crossfade + accent color transition
+Product grid: staggered card entrance (each card delays 50ms)
+Recipe accordion: smooth height expand/collapse
+AI panel: slide up from bottom with spring physics
+Scan zone: continuous pulse ring animation
+Page transitions: slide left/right between screens
+
+
+Vibe / Inspiration:
+Think Spotify meets a premium cocktail menu. Dark, rich, confident. The app should feel like it belongs on the App Store as a featured pick. Every interaction should have feedback — subtle scale on tap, color shifts on hover, smooth spring animations throughout.
+
+Paste this into Replit Agent and it'll scaffold the whole thing. Once it's running, let me know and I can help you wire up the Anthropic API key, tweak the design, or add the actual camera/barcode scanning functionality.You said: PLease make sure to include that I would like this app to be native so that both Android and apple user can use itPLease make sure to include that I would like this app to be native so that both Android and apple user can use it11:37 PMClaude responded: Here's the updated prompt with native mobile added throughout:Here's the updated prompt with native mobile added throughout:
+
+App Name: PourIt — Drink Recipe Scanner
+Overview:
+Build PourIt as a cross-platform native mobile app using React Native + Expo so it runs natively on both iOS and Android. Users scan or select a bottle/product and instantly get curated drink recipes. The app supports three modes: Spirits (alcoholic), THC-infused beverages, and Mocktails. The design should feel premium, modern, and exciting — like a high-end cocktail bar met a sleek consumer app. The goal is App Store + Google Play submission ready.
+
+Tech Stack:
+
+React Native + Expo (SDK 51+)
+Expo Router for file-based navigation
+React Native Reanimated 3 for animations
+React Native Gesture Handler for swipe/tap interactions
+NativeWind (Tailwind for React Native) for styling
+Expo Camera + Expo Barcode Scanner for bottle scanning
+AsyncStorage for saved recipes
+Google Fonts via expo-google-fonts: Playfair Display + DM Sans
+All recipe data hardcoded in /src/data/recipes.js
+Anthropic API called directly from the app
+
+
+Design Direction:
+
+Dark theme: deep near-black background (#0A0A0F) with mode-specific accent colors:
+
+Spirits: amber/gold #D4A843
+THC: purple/violet #7C3AED
+Mocktails: emerald green #10B981
+
+
+Each mode's accent color flows through active tab indicators, card borders, buttons, and gradient overlays
+Cards use semi-transparent dark backgrounds with thin colored borders (frosted glass feel via rgba + blur)
+Bold editorial typography — large Playfair Display headings, DM Sans body text
+Bottom tab bar with native feel, animated sliding indicator
+All touch targets minimum 44x44pt (Apple HIG compliant)
+Safe area insets respected on all screens (notch, Dynamic Island, Android cutouts)
+
+
+Core Features:
+1. Mode Switcher (Bottom Tab Bar)
+
+Three tabs: Spirits 🍸 | THC 🌿 | Mocktails 🧃
+Animated sliding indicator using Reanimated
+Switching modes triggers smooth crossfade and globally updates accent color
+Uses Expo Router tab layout
+
+2. Scan Screen (Home Tab)
+
+Native camera view using Expo Camera
+Animated viewfinder overlay — pulsing corner brackets with accent color glow
+Expo Barcode Scanner reads UPC/EAN barcodes from bottles and maps to known products
+Fallback: "Browse by category" chip row below camera for manual selection
+Haptic feedback on successful scan using Expo Haptics
+
+3. Product Selection Screen
+
+2-column grid of product cards with large emoji, product name, brand
+Staggered entrance animation with Reanimated (each card delays 50ms)
+Selected card gets glowing accent-colored border + scale animation
+Pull-to-refresh gesture supported
+
+4. Recipe List Screen
+
+Header shows selected product with a back chevron
+Vertical list of recipe cards: name, difficulty badge, time, flavor tags
+Tapping a card expands it with smooth height animation (Reanimated layout animation)
+Expanded card shows: ingredient list, numbered steps, heart save button, "Customize with AI" button
+Swipe left on a card to reveal a quick-save action (gesture handler)
+
+5. AI Customization Panel
+
+Native bottom sheet (react-native-bottom-sheet) slides up with spring physics
+Pre-filled text input with example prompt — fully editable
+Streams Claude's response token by token into the panel
+Frosted dark background with accent color border glow
+Dismiss by swiping down or tapping outside
+
+6. Saved Recipes Tab
+
+Heart saves recipe to AsyncStorage
+Saved tab shows all saved recipes grouped by mode with section headers
+Empty state with illustrated prompt to explore recipes
+
+
+Native-Specific Requirements:
+
+iOS: Support Dynamic Island and notch safe areas, haptic feedback on all primary actions, native share sheet for sharing recipes, supports iOS 16+
+Android: Material Design touch ripple on cards, back button handling, supports Android 10+
+Both: Splash screen via expo-splash-screen, app icon set via expo config, deep linking support so recipes can be shared via URL
+Permissions: Camera permission request with clear explanation string for both platforms
+Offline support: All recipe data available offline; AI features show graceful error when offline
+Performance: Use FlashList (from Shopify) instead of FlatList for recipe and product lists for 60fps scrolling
+
+
+Recipe Data (/src/data/recipes.js):
+Include at minimum:
+
+Spirits: Svedka Vodka, Captain Morgan, Tanqueray Gin, Jose Cuervo, Bulleit Bourbon, Bacardi Rum — 3 recipes each
+THC: Wynk Seltzer, Cann Social Tonic, Delta 9 Syrup, Kiva Camino Drops, Keef Sparkling, Olala Soda — 3 recipes each
+Mocktails: Seedlip Spice 94, Fever-Tree Mixers, Lyre's Spirits, Monin Syrup, Fresh Pressed Juices, Sparkling Water — 3 recipes each
+
+Each recipe object: name, difficulty, time, tags, ingredients, steps, description
+Also include a barcodeMap object that maps common UPC codes to product names for the scanner feature.
+
+Anthropic API Integration:
+
+Store API key in Expo's app.config.js extra field and access via expo-constants (never hardcode)
+Call https://api.anthropic.com/v1/messages using fetch
+Model: claude-sonnet-4-20250514, max_tokens: 1000
+System prompt: "You are a creative mixologist. Given a drink recipe and a user's customization request, suggest a personalized variation with a new name, modified ingredients, and steps. Be specific, fun, and concise."
+Stream the response token by token and render in the AI bottom sheet
+
+
+File Structure:
+/app
+  /(tabs)
+    _layout.tsx
+    spirits.tsx
+    thc.tsx
+    mocktails.tsx
+    saved.tsx
+/src
+  /components
+    ScanView.tsx
+    ProductGrid.tsx
+    RecipeList.tsx
+    RecipeCard.tsx
+    AIBottomSheet.tsx
+    ModeAccentProvider.tsx
+  /data
+    recipes.js
+    barcodeMap.js
+  /hooks
+    useModeTheme.ts
+    useSavedRecipes.ts
+    useClaudeStream.ts
+/assets
+  /fonts
+  /images
+app.config.js
+app.json
+
+Animations (React Native Reanimated 3):
+
+Mode switch: accent color interpolation across all themed elements
+Product grid: staggered card entrance (withDelay, withSpring)
+Recipe accordion: smooth height expand using layout animations
+AI bottom sheet: spring physics slide-up (react-native-bottom-sheet)
+Scan pulse ring: looping scale + opacity animation on viewfinder
+Card press: subtle scale down (0.97) on press with spring bounce back
+Tab indicator: shared element sliding underline
+
+
+App Store / Google Play Ready:
+
+app.json configured with bundle ID, version, build number, permissions descriptions
+Expo EAS Build config (eas.json) set up for both iOS and Android production builds
+Privacy usage descriptions for camera (required for App Store)
+App icon (1024x1024) and adaptive icon for Android included as placeholder assets
+Splash screen configured for both platforms
+
+
+Vibe / Inspiration:
+Think Spotify meets a premium cocktail menu — dark, rich, confident. Every interaction has native feedback: haptics on scan success, spring animations on card expand, smooth tab transitions. This should feel indistinguishable from a polished App Store featured app.
