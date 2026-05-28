@@ -11,10 +11,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AIPanel } from "@/components/AIPanel";
+import { EmptyState } from "@/components/EmptyState";
 import { MODE_COLORS } from "@/constants/colors";
 import { useSavedRecipes } from "@/context/SavedRecipesContext";
-import { AIPanel } from "@/components/AIPanel";
 import type { Recipe } from "@/src/data/recipes";
+import { safeImpact } from "@/utils/haptics";
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "#10B981",
@@ -42,13 +44,11 @@ export default function SavedScreen() {
     return (
       <View style={[styles.container, { paddingTop: topPad }]}>
         <Text style={styles.screenTitle}>Saved Recipes</Text>
-        <View style={styles.emptyState}>
-          <Feather name="heart" size={48} color="rgba(255,255,255,0.15)" />
-          <Text style={styles.emptyTitle}>No saved recipes yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Tap the heart icon on any recipe to save it here
-          </Text>
-        </View>
+        <EmptyState
+          icon="🍷"
+          title="No saved recipes"
+          subtitle="Scan or browse to discover drinks you love"
+        />
       </View>
     );
   }
@@ -115,7 +115,7 @@ export default function SavedScreen() {
                       <View style={styles.cardRight}>
                         <Pressable
                           onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            safeImpact(Haptics.ImpactFeedbackStyle.Light);
                             unsaveRecipe(recipe.id);
                           }}
                           style={styles.unsaveBtn}
@@ -163,7 +163,7 @@ export default function SavedScreen() {
                         <Pressable
                           style={[styles.aiBtn, { backgroundColor: accent }]}
                           onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            safeImpact(Haptics.ImpactFeedbackStyle.Medium);
                             setAiRecipe(recipe);
                             setAiAccent(accent);
                             setAiVisible(true);
@@ -213,26 +213,6 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { gap: 24 },
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 14,
-    paddingBottom: 100,
-  },
-  emptyTitle: {
-    fontFamily: "PlayfairDisplay_700Bold",
-    fontSize: 20,
-    color: "rgba(255,255,255,0.5)",
-  },
-  emptySubtitle: {
-    fontFamily: "DMSans_400Regular",
-    fontSize: 14,
-    color: "rgba(255,255,255,0.3)",
-    textAlign: "center",
-    paddingHorizontal: 40,
-    lineHeight: 22,
-  },
   section: { gap: 10 },
   sectionHeader: {
     flexDirection: "row",

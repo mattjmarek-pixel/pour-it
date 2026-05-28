@@ -1,0 +1,88 @@
+You are working in the "pour-it" pnpm monorepo. The Expo/React Native mobile app lives at artifacts/pour-it/. Do NOT modify artifacts/api-server/, lib/, scripts/, or any root workspace files.
+
+Your task is to add three UX improvements to the mobile app: skeleton loaders, empty states, and haptic feedback. Do NOT touch expo-camera, useNativeDriver settings, or any navigation/routing logic.
+
+---
+
+## 1. SKELETON LOADERS
+
+Install the dependency scoped to the mobile app only:
+  cd artifacts/pour-it && pnpm add react-native-skeleton-placeholder
+
+Create: artifacts/pour-it/components/SkeletonCard.tsx
+
+The skeleton should match the shape of a product card: a square image area (~160x160), a title line, and a subtitle line underneath. Use SkeletonPlaceholder with backgroundColor="#1A1A2E" and highlightColor="#2A2A4E" to match the dark theme (#0A0A0F).
+
+In artifacts/pour-it/components/ProductGrid.tsx:
+- Identify the existing loading state
+- While loading, render a FlatList of 6 SkeletonCard components in the same 2-column grid layout
+- Replace any ActivityIndicator or blank view with this skeleton grid
+
+---
+
+## 2. EMPTY STATES
+
+Create: artifacts/pour-it/components/EmptyState.tsx
+
+Props:
+  interface EmptyStateProps {
+    icon: string       // emoji
+    title: string
+    subtitle: string
+    accentColor?: string  // defaults to '#D4A843'
+    actionLabel?: string
+    onAction?: () => void
+  }
+
+Style to match the dark theme: centered layout, Playfair Display for title, DM Sans for subtitle, muted text color (#6B7280).
+
+Apply in:
+- artifacts/pour-it/components/ProductGrid.tsx — when products array is empty after loading:
+    icon="✨" title="Nothing here yet" subtitle="Try a different category"
+- artifacts/pour-it/app/(tabs)/saved.tsx — when saved recipes list is empty:
+    icon="🍷" title="No saved recipes" subtitle="Scan or browse to discover drinks you love"
+- artifacts/pour-it/components/RecipeList.tsx — if recipes array is empty:
+    icon="📖" title="No recipes found" subtitle="Try scanning another product"
+
+Pattern for each:
+  if (!isLoading && items.length === 0) return <EmptyState ... />
+
+---
+
+## 3. HAPTIC FEEDBACK
+
+expo-haptics is already included in Expo SDK 54 — no install needed.
+
+Add to artifacts/pour-it/components/ProductGrid.tsx:
+  import * as Haptics from 'expo-haptics';
+  On product card press: Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+
+Add to artifacts/pour-it/components/RecipeList.tsx:
+  On save/unsave toggle: Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+  On successful save: Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+
+Add to artifacts/pour-it/components/ScanView.tsx:
+  On scan/tap trigger: Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+
+Add to artifacts/pour-it/components/AIPanel.tsx:
+  On stream error: Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+  On stream complete: Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+
+Wrap every Haptics call in try/catch to silently no-op on simulators:
+  try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch (_) {}
+
+---
+
+## SUCCESS CRITERIA
+
+- [ ] ProductGrid shows 6 skeleton cards in a 2-column layout during loading
+- [ ] Skeleton colors match the dark theme (#0A0A0F background)
+- [ ] ProductGrid, RecipeList, and Saved tab all show EmptyState when data is empty
+- [ ] EmptyState uses Playfair Display / DM Sans fonts consistent with the rest of the app
+- [ ] Product card tap fires a light haptic
+- [ ] Save toggle fires a medium haptic + success notification
+- [ ] Scan tap fires a heavy haptic
+- [ ] AI stream error fires an error notification haptic
+- [ ] No crashes on iOS simulator (Haptics silently no-ops)
+- [ ] pnpm typecheck passes with no new errors
+- [ ] No changes to camera logic, API server, or useNativeDriver values

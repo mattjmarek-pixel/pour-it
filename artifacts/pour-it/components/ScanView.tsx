@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppMode, Product } from '@/src/data/recipes';
 import { CATEGORIES, PRODUCTS } from '@/src/data/recipes';
+import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
 
 interface ScanViewProps {
   mode: AppMode;
@@ -57,7 +58,7 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
     if (Platform.OS === 'web') {
       setScanState('scanning');
       setScanning(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      safeImpact(Haptics.ImpactFeedbackStyle.Heavy);
       setTimeout(() => {
         const products = PRODUCTS[mode];
         const random = products[Math.floor(Math.random() * products.length)];
@@ -89,7 +90,7 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
 
     setScanning(true);
     setScanState('scanning');
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeImpact(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
       const asset = result.assets[0];
@@ -117,7 +118,7 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
       if (data.productId) {
         const product = PRODUCTS[mode].find((p) => p.id === data.productId);
         if (product) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          safeNotification(Haptics.NotificationFeedbackType.Success);
           onProductFound(product);
           setScanState('idle');
           return;
@@ -233,7 +234,7 @@ export function ScanView({ mode, accentColor, onProductFound, onCategorySelected
               },
             ]}
             onPress={() => {
-              Haptics.selectionAsync();
+              safeSelection();
               onCategorySelected(cat);
             }}
             accessibilityLabel={`Browse ${cat} category`}

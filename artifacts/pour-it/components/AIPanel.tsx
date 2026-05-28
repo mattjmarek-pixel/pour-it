@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Recipe } from '@/src/data/recipes';
+import { safeImpact, safeNotification } from '@/utils/haptics';
 
 const STREAM_TIMEOUT_MS = 30_000;
 
@@ -32,6 +33,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
   const skeletonAnim = useRef(new Animated.Value(0.3)).current;
   const abortControllerRef = useRef<AbortController | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didTimeoutRef = useRef(false);
 
   const [prompt, setPrompt] = useState('Make this drink more tropical');
   const [streaming, setStreaming] = useState(false);
@@ -80,15 +82,19 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
   const handleStream = async () => {
     if (!recipe || streaming) return;
     Keyboard.dismiss();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeImpact(Haptics.ImpactFeedbackStyle.Medium);
     setStreaming(true);
     setResponse('');
     setError('');
+    let hadError = false;
+    let streamCompleted = false;
 
     abortControllerRef.current = new AbortController();
     const { signal } = abortControllerRef.current;
+    didTimeoutRef.current = false;
 
     timeoutRef.current = setTimeout(() => {
+      didTimeoutRef.current = true;
       abortControllerRef.current?.abort();
     }, STREAM_TIMEOUT_MS);
 
@@ -107,17 +113,20 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
       });
 
       if (res.status === 429) {
+        hadError = true;
         setError("We're getting a lot of requests right now. Please try again in a moment.");
         return;
       }
 
       if (!res.ok) {
+        hadError = true;
         setError(`Something went wrong (${res.status}). Tap to retry.`);
         return;
       }
 
       const reader = res.body?.getReader();
       if (!reader) {
+        hadError = true;
         setError('Something went wrong. Tap to retry.');
         return;
       }
@@ -142,6 +151,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
             try {
               const parsed = JSON.parse(data) as { content?: string; error?: string };
               if (parsed.error) {
+                hadError = true;
                 setError(parsed.error);
                 return;
               }
@@ -155,20 +165,31 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
       }
 
       if (!receivedAny) {
+        hadError = true;
         setError('No response received. Tap to retry.');
+      } else {
+        streamCompleted = true;
       }
     } catch (err) {
       const e = err as Error;
       if (e.name === 'AbortError') {
-        if (signal.aborted) {
+        if (didTimeoutRef.current) {
+          hadError = true;
           setError('Request timed out after 30 seconds. Tap to retry.');
         }
+        // Otherwise: user-initiated close/dismiss — no error feedback
       } else {
+        hadError = true;
         setError('Unable to connect. Check your connection and tap to retry.');
       }
     } finally {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setStreaming(false);
+      if (hadError) {
+        safeNotification(Haptics.NotificationFeedbackType.Error);
+      } else if (streamCompleted) {
+        safeNotification(Haptics.NotificationFeedbackType.Success);
+      }
     }
   };
 

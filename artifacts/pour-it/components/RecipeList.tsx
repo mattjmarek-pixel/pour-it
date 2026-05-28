@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { AppMode, Recipe, Product } from '@/src/data/recipes';
+import { EmptyState } from '@/components/EmptyState';
 import { useSavedRecipes } from '@/context/SavedRecipesContext';
+import type { AppMode, Recipe, Product } from '@/src/data/recipes';
+import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -43,7 +45,7 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
   const scale = useRef(new Animated.Value(1)).current;
 
   const toggle = () => {
-    Haptics.selectionAsync();
+    safeSelection();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     onToggle();
   };
@@ -91,8 +93,13 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
           <View style={styles.cardActions}>
             <Pressable
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                saved ? unsaveRecipe(recipe.id) : saveRecipe(recipe, product, mode);
+                safeImpact(Haptics.ImpactFeedbackStyle.Medium);
+                if (saved) {
+                  unsaveRecipe(recipe.id);
+                } else {
+                  saveRecipe(recipe, product, mode);
+                  safeNotification(Haptics.NotificationFeedbackType.Success);
+                }
               }}
               style={styles.heartBtn}
               accessibilityLabel={saved ? 'Remove from saved' : 'Save recipe'}
@@ -137,7 +144,7 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
           <Pressable
             style={[styles.aiBtn, { backgroundColor: accentColor }]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              safeImpact(Haptics.ImpactFeedbackStyle.Medium);
               onCustomizeAI(recipe);
             }}
             accessibilityLabel="Customize this recipe with AI"
@@ -184,24 +191,35 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         </View>
       </View>
 
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {product.recipes.map((recipe) => (
-          <RecipeCard
-            key={recipe.id}
-            recipe={recipe}
-            product={product}
-            mode={mode}
-            accentColor={accentColor}
-            isExpanded={expandedId === recipe.id}
-            onToggle={() => setExpandedId(expandedId === recipe.id ? null : recipe.id)}
-            onCustomizeAI={onCustomizeAI}
-          />
-        ))}
-      </ScrollView>
+      {product.recipes.length === 0 ? (
+        <EmptyState
+          icon="📖"
+          title="No recipes found"
+          subtitle="Try scanning another product"
+          accentColor={accentColor}
+          actionLabel="Go back"
+          onAction={onBack}
+        />
+      ) : (
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {product.recipes.map((recipe) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              product={product}
+              mode={mode}
+              accentColor={accentColor}
+              isExpanded={expandedId === recipe.id}
+              onToggle={() => setExpandedId(expandedId === recipe.id ? null : recipe.id)}
+              onCustomizeAI={onCustomizeAI}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }

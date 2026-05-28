@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonCard } from '@/components/SkeletonCard';
 import type { AppMode, Product } from '@/src/data/recipes';
 import { PRODUCTS } from '@/src/data/recipes';
+import { safeImpact } from '@/utils/haptics';
 
 interface ProductCardProps {
   product: Product;
@@ -51,7 +54,7 @@ function ProductCard({ product, accentColor, index, onSelect }: ProductCardProps
           { borderColor: pressed ? accentColor : 'rgba(255,255,255,0.10)' },
         ]}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          safeImpact(Haptics.ImpactFeedbackStyle.Light);
           onSelect(product);
         }}
         onPressIn={() => {
@@ -82,9 +85,18 @@ interface ProductGridProps {
   onBack: () => void;
 }
 
+const SKELETON_KEYS = ['s0', 's1', 's2', 's3', 's4', 's5'];
+
 export function ProductGrid({ mode, accentColor, category, onProductSelected, onBack }: ProductGridProps) {
   const insets = useSafeAreaInsets();
+  const [isLoading, setIsLoading] = useState(true);
   const products = PRODUCTS[mode].filter((p) => !category || p.category === category);
+
+  useEffect(() => {
+    setIsLoading(true);
+    const t = setTimeout(() => setIsLoading(false), 350);
+    return () => clearTimeout(t);
+  }, [mode, category]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
@@ -96,25 +108,47 @@ export function ProductGrid({ mode, accentColor, category, onProductSelected, on
           <Text style={styles.title} numberOfLines={1}>
             {category ?? 'All Products'}
           </Text>
-          <Text style={styles.subtitle}>{products.length} options</Text>
+          <Text style={styles.subtitle}>
+            {isLoading ? 'Loading...' : `${products.length} options`}
+          </Text>
         </View>
       </View>
 
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        contentContainerStyle={styles.grid}
-        renderItem={({ item, index }) => (
-          <ProductCard
-            product={item}
-            accentColor={accentColor}
-            index={index}
-            onSelect={onProductSelected}
-          />
-        )}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <FlatList
+          data={SKELETON_KEYS}
+          keyExtractor={(k) => k}
+          numColumns={2}
+          contentContainerStyle={styles.grid}
+          renderItem={() => <SkeletonCard />}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : products.length === 0 ? (
+        <EmptyState
+          icon="✨"
+          title="Nothing here yet"
+          subtitle="Try a different category"
+          accentColor={accentColor}
+          actionLabel="Go back"
+          onAction={onBack}
+        />
+      ) : (
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          contentContainerStyle={styles.grid}
+          renderItem={({ item, index }) => (
+            <ProductCard
+              product={item}
+              accentColor={accentColor}
+              index={index}
+              onSelect={onProductSelected}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
