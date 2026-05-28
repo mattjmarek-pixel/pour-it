@@ -1,0 +1,144 @@
+You are working in the "pour-it" pnpm monorepo. The Expo/React Native mobile app lives at artifacts/pour-it/. Your task is to fix and rebuild the scan feature to work like Yuka — a live camera viewfinder that automatically detects a barcode and instantly navigates to the matched product. Do NOT modify artifacts/api-server/, context files, or recipe data files.
+
+---
+
+## BACKGROUND
+
+The current ScanView.tsx uses a simulated tap-to-scan fallback because expo-camera fails to resolve in the pnpm workspace due to Metro bundler conflicts. We are replacing this approach entirely using expo-barcode-scanner and a Metro resolver workaround that is known to work in pnpm workspaces.
+
+---
+
+## PHASE 1 — FIX THE DEPENDENCY
+
+### 1a. Install the correct package
+
+In artifacts/pour-it/, install:
+  pnpm add expo-barcode-scanner
+
+Do NOT use expo-camera directly. expo-barcode-scanner has a simpler native module footprint that resolves correctly in pnpm workspaces.
+
+### 1b. Fix Metro resolver for pnpm
+
+In artifacts/pour-it/metro.config.js (create if it does not exist), add:
+
+const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
+
+const config = getDefaultConfig(__dirname);
+
+// Fix pnpm symlink resolution for native modules
+config.resolver.nodeModulesPaths = [
+  path.resolve(__dirname, 'node_modules'),
+  path.resolve(__dirname, '../../node_modules'),
+];
+
+config.resolver.disableHierarchicalLookup = false;
+
+module.exports = config;
+
+### 1c. Add camera permission to app.json
+
+In artifacts/pour-it/app.json, ensure the following are present under expo.plugins:
+  ["expo-barcode-scanner", {
+    "cameraPermission": "Allow PourIt to scan drink bottle barcodes."
+  }]
+
+And under expo.ios.infoPlist:
+  "NSCameraUsageDescription": "Allow PourIt to scan drink bottle barcodes."
+
+---
+
+## PHASE 2 — REBUILD SCANVIEW.TSX
+
+Replace the contents of artifacts/pour-it/components/ScanView.tsx entirely with a Yuka-style live barcode scanner. The design requirements are:
+
+### Camera viewfinder
+- Full-screen live camera feed as the background using BarCodeScanner from expo-barcode-scanner
+- A centered scanning reticle: a rounded rectangle (280×180px) with corner accent marks in the mode's accent color (passed as prop)
+- Subtle animated pulse on the reticle corners — a gentle opacity loop using useNativeDriver: true
+- Semi-transparent dark overlay outside the reticle area (4 overlay panels: top, bottom, left, right)
+
+### Scan behavior
+- Scanning is automatic — no tap required, just point and scan
+- Listen to onBarCodeScanned callback from BarCodeScanner
+- On a successful scan, trigger: Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+- After scanning, set scanned = true to prevent duplicate scans, then look up the barcode in the product catalog
+- Product lookup: match the barcode against product.barcode field in the data (add a barcode field to a few products for testing — use real UPC codes for: Hendricks Gin "0088076179075", Bacardi Superior "0080432400265", Seedlip Spice 94 "0850004251016")
+- If product found → call onProductFound(product) prop immediately
+- If product NOT found → show a "Product not found" toast for 2 seconds, then reset scanned = false so the user can try again
+
+### Permission handling
+- On mount, request camera permission using BarCodeScanner.requestPermissionsAsync()
+- If permission denied → show EmptyState with icon="📷", title="Camera access needed", subtitle="Enable camera access in Settings to scan bottles", actionLabel="Open Settings", onAction={() => Linking.openSettings()}
+- If permission loading → show a centered ActivityIndicator in the mode's accent color
+
+### Manual fallback
+- Below the viewfinder, show a small text link: "Browse manually" 
+- Tapping it calls onBrowseManually() prop
+- Style: DMSans_400Regular, color #6B7280, fontSize 13, centered, paddingVertical 16
+
+### Props interface
+interface ScanViewProps {
+  accentColor: string;
+  onProductFound: (product: Product) => void;
+  onBrowseManually: () => void;
+}
+
+### Top UI
+- At the top of the screen (safe area aware), show the mode name and a small torch/flashlight toggle button
+- Torch toggle: use BarCodeScanner's torch prop (type="back" flashMode={torch ? 'torch' : 'off'})
+- Torch button: a sun/flashlight icon, color white, 44x44 touch target
+
+---
+
+## PHASE 3 — UPDATE MODESCREEN.TSX
+
+In artifacts/pour-it/components/ModeScreen.tsx, update the scan → product flow:
+
+- Pass the correct accentColor prop to ScanView based on the current mode
+- Wire onProductFound to navigate directly to the RecipeList for that product (skip ProductGrid)
+- Wire onBrowseManually to show ProductGrid as before
+- Remove any existing simulated scan / random product selection logic
+
+---
+
+## PHASE 4 — ADD BARCODE FIELD TO PRODUCT TYPE
+
+In artifacts/pour-it/src/data/recipes.ts:
+- Add barcode?: string to the Product interface
+- Add real UPC barcodes to 3 products for testing:
+  - Hendricks Gin: "0088076179075"
+  - Bacardi Superior: "0080432400265"  
+  - Seedlip Spice 94: "0850004251016"
+
+---
+
+## PHASE 5 — "NOT FOUND" TOAST COMPONENT
+
+Create artifacts/pour-it/components/ScanToast.tsx:
+
+A simple animated toast that slides up from the bottom of the scan reticle:
+- Text: passed as prop
+- Background: rgba(0,0,0,0.75), borderRadius: 100, paddingHorizontal: 20, paddingVertical: 10
+- Font: DMSans_400Regular, color white, fontSize 14
+- Animates in with translateY + opacity using useNativeDriver: true
+- Auto-dismisses after duration prop (default 2000ms)
+
+Props: { message: string; visible: boolean; duration?: number }
+
+---
+
+## SUCCESS CRITERIA
+
+- [ ] Camera opens immediately when ScanView mounts, no tap needed
+- [ ] Live viewfinder fills the screen with overlay and reticle
+- [ ] Torch toggle works
+- [ ] Scanning Hendricks Gin UPC navigates directly to its recipes
+- [ ] Scanning an unknown barcode shows "Product not found" toast then resets
+- [ ] Permission denied state shows EmptyState with Settings deep link
+- [ ] "Browse manually" link works and shows ProductGrid
+- [ ] Haptic fires on successful scan
+- [ ] No crashes on simulator (camera shows permission prompt or blank, no red screen)
+- [ ] useNativeDriver: true on all animations in ScanView and ScanToast
+- [ ] pnpm typecheck passes with no new errors
+- [ ] No changes to recipe data (except adding barcode field to 3 products), EmptyState, SkeletonCard, or ErrorBoundary
