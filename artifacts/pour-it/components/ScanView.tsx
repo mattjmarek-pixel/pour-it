@@ -1,408 +1,432 @@
 import { Feather } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   Animated,
+  Linking,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EmptyState } from '@/components/EmptyState';
+import { ScanToast } from '@/components/ScanToast';
 import type { AppMode, Product } from '@/src/data/recipes';
-import { CATEGORIES, PRODUCTS } from '@/src/data/recipes';
-import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
+import { PRODUCTS } from '@/src/data/recipes';
+import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
   mode: AppMode;
   accentColor: string;
   onProductFound: (product: Product) => void;
-  onCategorySelected: (category: string) => void;
+  onBrowseManually: () => void;
 }
 
-export function ScanView({ mode, accentColor, onProductFound, onCategorySelected }: ScanViewProps) {
+const RETICLE_WIDTH = 280;
+const RETICLE_HEIGHT = 180;
+
+const MODE_LABELS: Record<AppMode, string> = {
+  spirits: 'Spirits',
+  thc: 'THC',
+  mocktails: 'Mocktails',
+};
+
+export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }: ScanViewProps) {
   const insets = useSafeAreaInsets();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const opacityAnim = useRef(new Animated.Value(0.6)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  const [scanning, setScanning] = useState(false);
-  const [scanState, setScanState] = useState<'idle' | 'scanning' | 'nomatch' | 'error'>('idle');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const [torch, setTorch] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannedRef = useRef(false);
+
+  const cornerOpacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.parallel([
-          Animated.timing(pulseAnim, { toValue: 1.03, duration: 1400, useNativeDriver: true }),
-          Animated.timing(opacityAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-          Animated.timing(opacityAnim, { toValue: 0.45, duration: 1400, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 0, duration: 1400, useNativeDriver: true }),
-        ]),
+        Animated.timing(cornerOpacity, {
+          toValue: 1,
+          duration: 1100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cornerOpacity, {
+          toValue: 0.55,
+          duration: 1100,
+          useNativeDriver: true,
+        }),
       ])
     );
     pulse.start();
     return () => pulse.stop();
+  }, [cornerOpacity]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!permission) return;
+    if (!permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
   }, []);
 
-  const handleTapScan = async () => {
-    if (scanning) return;
+  const handleBarcodeScanned = (result: BarcodeScanningResult) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    setScanned(true);
 
-    if (Platform.OS === 'web') {
-      setScanState('scanning');
-      setScanning(true);
-      safeImpact(Haptics.ImpactFeedbackStyle.Heavy);
-      setTimeout(() => {
-        const products = PRODUCTS[mode];
-        const random = products[Math.floor(Math.random() * products.length)];
-        onProductFound(random);
-        setScanning(false);
-        setScanState('idle');
-      }, 800);
+    const raw = result.data?.trim() ?? '';
+    if (!raw) {
+      resetAfter(800);
       return;
     }
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Camera Access Needed',
-        'Please allow camera access in Settings to scan bottle labels.',
-        [{ text: 'OK' }]
-      );
+    const candidates = new Set<string>([
+      raw,
+      raw.replace(/^0+/, ''),
+      raw.padStart(13, '0'),
+      raw.padStart(12, '0'),
+    ]);
+
+    const allProducts = PRODUCTS[mode];
+    const match = allProducts.find((p) =>
+      (p.barcodes ?? []).some((code) => candidates.has(code) || candidates.has(code.replace(/^0+/, '')))
+    );
+
+    if (match) {
+      safeNotification(Haptics.NotificationFeedbackType.Success);
+      onProductFound(match);
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      base64: true,
-      quality: 0.5,
-      allowsEditing: false,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
-
-    if (result.canceled) return;
-
-    setScanning(true);
-    setScanState('scanning');
-    safeImpact(Haptics.ImpactFeedbackStyle.Heavy);
-
-    try {
-      const asset = result.assets[0];
-      const imageBase64 = asset.base64;
-      if (!imageBase64) throw new Error('No image data');
-
-      const productHints = PRODUCTS[mode].map((p) => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-      }));
-
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const res = await fetch(`https://${domain}/api/identify-bottle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, products: productHints }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = (await res.json()) as { productId: string | null };
-
-      if (data.productId) {
-        const product = PRODUCTS[mode].find((p) => p.id === data.productId);
-        if (product) {
-          safeNotification(Haptics.NotificationFeedbackType.Success);
-          onProductFound(product);
-          setScanState('idle');
-          return;
-        }
-      }
-
-      setScanState('nomatch');
-    } catch {
-      setScanState('error');
-    } finally {
-      setScanning(false);
-    }
+    safeNotification(Haptics.NotificationFeedbackType.Warning);
+    setToastVisible(true);
+    resetAfter(2000);
   };
 
-  const categories = CATEGORIES[mode];
-  const topPad = insets.top + (Platform.OS === 'web' ? 67 : 20);
+  const resetAfter = (ms: number) => {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => {
+      scannedRef.current = false;
+      setScanned(false);
+      setToastVisible(false);
+    }, ms);
+  };
+
+  // Web fallback: CameraView's barcode scanning is unreliable in the iframe
+  // preview, so we show a simple browse-manually surface instead of a broken
+  // camera. The reticle still renders so the design intent is visible.
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.topBar}>
+          <Text style={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
+        </View>
+        <View style={styles.webNoticeWrap}>
+          <View style={[styles.reticle, { width: RETICLE_WIDTH, height: RETICLE_HEIGHT }]}>
+            <Reticle accentColor={accentColor} opacity={cornerOpacity} />
+          </View>
+          <Text style={styles.webNoticeTitle}>Camera preview not available on web</Text>
+          <Text style={styles.webNoticeSub}>
+            On a device, point at a barcode to scan automatically.
+          </Text>
+        </View>
+        <Pressable
+          onPress={onBrowseManually}
+          accessibilityRole="button"
+          accessibilityLabel="Browse manually"
+          style={styles.browseLinkWrap}
+        >
+          <Text style={styles.browseLink}>Browse manually</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!permission) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <ActivityIndicator color={accentColor} />
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.root}>
+        <EmptyState
+          icon="📷"
+          title="Camera access needed"
+          subtitle="Enable camera access in Settings to scan bottles"
+          accentColor={accentColor}
+          actionLabel="Open Settings"
+          onAction={() => Linking.openSettings()}
+        />
+        <Pressable
+          onPress={onBrowseManually}
+          accessibilityRole="button"
+          accessibilityLabel="Browse manually"
+          style={styles.browseLinkWrap}
+        >
+          <Text style={styles.browseLink}>Browse manually</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: topPad }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.headline}>Scan Your Bottle</Text>
-      <Text style={[styles.subheadline, { color: accentColor }]}>
-        Tap the scanner or browse by category
-      </Text>
+    <View style={styles.root}>
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        facing="back"
+        enableTorch={torch}
+        barcodeScannerSettings={{
+          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
+        }}
+        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+      />
 
-      <View style={styles.scanContainer}>
-        <Animated.View
-          style={[
-            styles.viewfinderOuter,
-            {
-              transform: [{ scale: pulseAnim }],
-              opacity: opacityAnim,
-            },
-          ]}
-        >
-          <Pressable
-            style={[styles.viewfinder, { borderColor: accentColor }]}
-            onPress={handleTapScan}
-            accessibilityLabel="Scan bottle label"
-            accessibilityHint="Opens camera to identify the bottle and find matching recipes"
-            accessibilityRole="button"
-          >
-            <View style={styles.scanInner}>
-              {scanState === 'scanning' ? (
-                <>
-                  <Animated.View style={[styles.scanLine, { backgroundColor: accentColor }]} />
-                  <Text style={[styles.scanningText, { color: accentColor }]}>Identifying...</Text>
-                  <Text style={styles.tapSub}>Analyzing bottle label</Text>
-                </>
-              ) : scanState === 'nomatch' ? (
-                <>
-                  <View style={[styles.scanIcon, { borderColor: 'rgba(255,255,255,0.3)' }]}>
-                    <Feather name="alert-circle" size={32} color="rgba(255,255,255,0.5)" />
-                  </View>
-                  <Text style={[styles.tapText, { color: 'rgba(255,255,255,0.7)' }]}>
-                    No match found
-                  </Text>
-                  <Text style={styles.tapSub}>
-                    Couldn't identify this bottle — try browsing instead
-                  </Text>
-                  <Text style={[styles.retryHint, { color: accentColor }]}>Tap to try again</Text>
-                </>
-              ) : scanState === 'error' ? (
-                <>
-                  <View style={[styles.scanIcon, { borderColor: '#EF4444' }]}>
-                    <Feather name="wifi-off" size={32} color="#EF4444" />
-                  </View>
-                  <Text style={[styles.tapText, { color: '#EF4444' }]}>Connection failed</Text>
-                  <Text style={styles.tapSub}>Check your connection and tap to retry</Text>
-                </>
-              ) : (
-                <>
-                  <View style={[styles.scanIcon, { borderColor: accentColor }]}>
-                    <Feather name="camera" size={32} color={accentColor} />
-                  </View>
-                  <Text style={[styles.tapText, { color: accentColor }]}>Tap to Scan</Text>
-                  <Text style={styles.tapSub}>Point at bottle label to identify it</Text>
-                </>
-              )}
-            </View>
+      {/* Dim overlays around the reticle */}
+      <View style={[styles.overlay, styles.overlayTop, { height: '50%', marginBottom: RETICLE_HEIGHT / 2 }]} />
+      <View style={[styles.overlay, styles.overlayBottom, { height: '50%', marginTop: RETICLE_HEIGHT / 2 }]} />
+      <View
+        style={[
+          styles.overlaySide,
+          { width: `50%`, marginRight: RETICLE_WIDTH / 2, left: 0 },
+        ]}
+      />
+      <View
+        style={[
+          styles.overlaySide,
+          { width: `50%`, marginLeft: RETICLE_WIDTH / 2, right: 0 },
+        ]}
+      />
 
-            <View style={[styles.corner, styles.topLeft, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.topRight, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.bottomLeft, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.bottomRight, { borderColor: accentColor }]} />
-          </Pressable>
-        </Animated.View>
-      </View>
-
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.dividerText}>or browse by category</Text>
-        <View style={styles.divider} />
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
+      {/* Reticle */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.reticle,
+          {
+            width: RETICLE_WIDTH,
+            height: RETICLE_HEIGHT,
+            top: '50%',
+            left: '50%',
+            marginLeft: -RETICLE_WIDTH / 2,
+            marginTop: -RETICLE_HEIGHT / 2,
+            position: 'absolute',
+          },
+        ]}
       >
-        {categories.map((cat) => (
-          <Pressable
-            key={cat}
-            style={({ pressed }) => [
-              styles.chip,
-              {
-                borderColor: accentColor,
-                backgroundColor: pressed ? `${accentColor}25` : 'rgba(255,255,255,0.06)',
-                transform: [{ scale: pressed ? 0.95 : 1 }],
-              },
-            ]}
-            onPress={() => {
-              safeSelection();
-              onCategorySelected(cat);
-            }}
-            accessibilityLabel={`Browse ${cat} category`}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.chipText, { color: accentColor }]}>{cat}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+        <Reticle accentColor={accentColor} opacity={cornerOpacity} />
+      </View>
 
-      <Text style={styles.browseAll}>Or tap any category above to browse all products</Text>
-    </ScrollView>
+      {/* Top bar */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
+        <Pressable
+          onPress={() => setTorch((t) => !t)}
+          style={styles.torchBtn}
+          accessibilityRole="button"
+          accessibilityLabel={torch ? 'Turn off flashlight' : 'Turn on flashlight'}
+          hitSlop={8}
+        >
+          <Feather name={torch ? 'zap' : 'zap-off'} size={22} color="#FFFFFF" />
+        </Pressable>
+      </View>
+
+      {/* Toast above the browse-manually link */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.toastSlot,
+          {
+            top: '50%',
+            marginTop: RETICLE_HEIGHT / 2 + 24,
+          },
+        ]}
+      >
+        <ScanToast message="Product not found" visible={toastVisible} />
+      </View>
+
+      {/* Browse manually link */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+        <Pressable
+          onPress={onBrowseManually}
+          accessibilityRole="button"
+          accessibilityLabel="Browse manually"
+        >
+          <Text style={styles.browseLink}>Browse manually</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function Reticle({
+  accentColor,
+  opacity,
+}: {
+  accentColor: string;
+  opacity: Animated.Value;
+}) {
+  return (
+    <>
+      <Animated.View
+        style={[styles.corner, styles.cornerTL, { borderColor: accentColor, opacity }]}
+      />
+      <Animated.View
+        style={[styles.corner, styles.cornerTR, { borderColor: accentColor, opacity }]}
+      />
+      <Animated.View
+        style={[styles.corner, styles.cornerBL, { borderColor: accentColor, opacity }]}
+      />
+      <Animated.View
+        style={[styles.corner, styles.cornerBR, { borderColor: accentColor, opacity }]}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: '#0A0A0F',
   },
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 130,
-  },
-  headline: {
-    fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: 34,
-    color: '#FFFFFF',
-    letterSpacing: -0.8,
-    marginBottom: 6,
-  },
-  subheadline: {
-    fontFamily: 'DMSans_400Regular',
-    fontSize: 15,
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  scanContainer: {
-    alignItems: 'center',
-    marginBottom: 36,
-  },
-  viewfinderOuter: {
-    width: '100%',
-    aspectRatio: 0.9,
-  },
-  viewfinder: {
-    flex: 1,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    overflow: 'visible',
+  center: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scanInner: {
-    alignItems: 'center',
-    gap: 14,
-    padding: 30,
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  scanIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+  overlayTop: { top: 0 },
+  overlayBottom: { bottom: 0 },
+  overlaySide: {
+    position: 'absolute',
+    top: '50%',
+    height: RETICLE_HEIGHT,
+    marginTop: -RETICLE_HEIGHT / 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  tapText: {
-    fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.3,
-  },
-  tapSub: {
-    fontFamily: 'DMSans_400Regular',
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.35)',
-    textAlign: 'center',
-  },
-  retryHint: {
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 13,
-    marginTop: 4,
-  },
-  scanLine: {
-    width: '80%',
-    height: 2,
-    borderRadius: 1,
-    marginBottom: 10,
-  },
-  scanningText: {
-    fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: 20,
-    letterSpacing: -0.3,
+  reticle: {
+    borderRadius: 18,
   },
   corner: {
     position: 'absolute',
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderWidth: 3,
   },
-  topLeft: {
-    top: -1,
-    left: -1,
+  cornerTL: {
+    top: -2,
+    left: -2,
     borderRightWidth: 0,
     borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
+    borderTopLeftRadius: 12,
   },
-  topRight: {
-    top: -1,
-    right: -1,
+  cornerTR: {
+    top: -2,
+    right: -2,
     borderLeftWidth: 0,
     borderBottomWidth: 0,
-    borderTopRightRadius: 8,
+    borderTopRightRadius: 12,
   },
-  bottomLeft: {
-    bottom: -1,
-    left: -1,
+  cornerBL: {
+    bottom: -2,
+    left: -2,
     borderRightWidth: 0,
     borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
+    borderBottomLeftRadius: 12,
   },
-  bottomRight: {
-    bottom: -1,
-    right: -1,
+  cornerBR: {
+    bottom: -2,
+    right: -2,
     borderLeftWidth: 0,
     borderTopWidth: 0,
-    borderBottomRightRadius: 8,
+    borderBottomRightRadius: 12,
   },
-  dividerRow: {
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
+    justifyContent: 'space-between',
   },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+  modeLabel: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
-  dividerText: {
-    fontFamily: 'DMSans_400Regular',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  chips: {
-    gap: 10,
-    flexDirection: 'row',
-    paddingBottom: 6,
-  },
-  chip: {
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderRadius: 100,
-    borderWidth: 1,
-    minHeight: 44,
+  torchBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  chipText: {
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 14,
+  toastSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-  browseAll: {
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  browseLinkWrap: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  browseLink: {
     fontFamily: 'DMSans_400Regular',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.2)',
+    color: '#6B7280',
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: 16,
+  },
+  webNoticeWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 20,
+  },
+  webNoticeTitle: {
+    fontFamily: 'PlayfairDisplay_700Bold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  webNoticeSub: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    maxWidth: 260,
   },
 });

@@ -421,7 +421,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Rum',
       spiritType: 'white rum',
       flavorNotes: ['light', 'sweet', 'vanilla'],
-      barcodes: ['080432402702'],
+      barcodes: ['0080432400265'],
       recipes: [
         {
           id: 'bacardi-classic-daiquiri',
@@ -543,6 +543,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Gin',
       spiritType: 'gin',
       flavorNotes: ['cucumber', 'rose', 'juniper'],
+      barcodes: ['0088076179075'],
       recipes: [
         {
           id: 'hendricks-classic-gt',
@@ -1494,6 +1495,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Botanical',
       spiritType: 'non-alcoholic spirit',
       flavorNotes: ['allspice', 'cardamom', 'citrus'],
+      barcodes: ['0850004251016'],
       recipes: [
         {
           id: 'seedlip-spice-spritz',

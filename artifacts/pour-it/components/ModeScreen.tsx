@@ -28,8 +28,8 @@ export function ModeScreen({ mode }: ModeScreenProps) {
     setView('recipes');
   };
 
-  const handleCategorySelected = (category: string) => {
-    setSelectedCategory(category);
+  const handleBrowseManually = () => {
+    setSelectedCategory(null);
     setView('products');
   };
 
@@ -59,7 +59,7 @@ export function ModeScreen({ mode }: ModeScreenProps) {
           mode={mode}
           accentColor={accentColor}
           onProductFound={handleProductFound}
-          onCategorySelected={handleCategorySelected}
+          onBrowseManually={handleBrowseManually}
         />
       )}
       {view === 'products' && (
