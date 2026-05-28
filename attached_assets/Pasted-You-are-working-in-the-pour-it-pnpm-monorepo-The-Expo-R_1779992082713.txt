@@ -1,0 +1,77 @@
+You are working in the "pour-it" pnpm monorepo. The Expo/React Native mobile app lives at artifacts/pour-it/. Do NOT modify artifacts/api-server/, lib/, scripts/, or any root workspace files. Do NOT touch EmptyState.tsx, SkeletonCard.tsx, ErrorBoundary.tsx, or ErrorFallback.tsx.
+
+Your task is to migrate all Animated API calls from useNativeDriver: false to useNativeDriver: true across the mobile app. This is a performance fix — animations currently run on the JS thread, causing jank on real devices.
+
+---
+
+## BACKGROUND
+
+useNativeDriver: true offloads animations to the native UI thread. It only supports transform and opacity properties. It does NOT support layout properties like width, height, top, left, padding, margin, backgroundColor, or borderWidth.
+
+The migration strategy is:
+- If an animation drives only transform/opacity → switch to useNativeDriver: true directly
+- If an animation drives a layout property → refactor to use transform equivalents (translateX/translateY/scaleX/scaleY) to achieve the same visual result, then use useNativeDriver: true
+- If a layout property cannot be replaced with transforms → keep useNativeDriver: false for that specific animation only, and add a comment: // layout property — native driver not supported
+
+---
+
+## FILES TO AUDIT AND FIX
+
+Work through each file below. For each one: read it fully, identify every Animated.timing / Animated.spring / Animated.decay call, check the style properties being driven, and apply the migration.
+
+1. artifacts/pour-it/components/ScanView.tsx
+2. artifacts/pour-it/components/ProductGrid.tsx
+3. artifacts/pour-it/components/RecipeList.tsx
+4. artifacts/pour-it/components/AIPanel.tsx
+5. artifacts/pour-it/components/ModeScreen.tsx
+
+---
+
+## COMMON PATTERNS TO WATCH FOR
+
+Fade-in animations driving opacity:
+  BEFORE: Animated.timing(fadeAnim, { toValue: 1, useNativeDriver: false })
+  AFTER:  Animated.timing(fadeAnim, { toValue: 1, useNativeDriver: true })
+
+Slide-up animations driving translateY:
+  BEFORE: Animated.timing(slideAnim, { toValue: 0, useNativeDriver: false })
+  AFTER:  Animated.timing(slideAnim, { toValue: 0, useNativeDriver: true })
+
+Slide animations currently driving top/bottom/height (layout props):
+  BEFORE: style={{ top: slideAnim }}
+  AFTER:  style={{ transform: [{ translateY: slideAnim }] }}
+  AND:    useNativeDriver: true
+
+Scale animations:
+  BEFORE: style={{ width: scaleAnim }}
+  AFTER:  style={{ transform: [{ scaleX: scaleAnim }] }}
+  AND:    useNativeDriver: true
+
+---
+
+## AIPAINEL BOTTOM SHEET — SPECIAL CARE
+
+AIPanel.tsx uses a sliding bottom sheet. It almost certainly animates a layout property (height or top) for the sheet position. Refactor it to use translateY on the sheet container instead:
+
+  // The sheet starts off-screen below, slides up on open
+  const sheetAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  
+  // To open:
+  Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, ... })
+  
+  // Apply as:
+  style={{ transform: [{ translateY: sheetAnim }] }}
+
+If AIPanel uses interpolated height (e.g. animating from 0 to 400), replace with translateY from SHEET_HEIGHT to 0 instead. This achieves the same visual slide-up with native driver support.
+
+---
+
+## SUCCESS CRITERIA
+
+- [ ] pnpm typecheck passes with no new errors
+- [ ] Every Animated call in the 5 listed files uses useNativeDriver: true
+- [ ] Any exceptions have a comment explaining why native driver is not supported
+- [ ] AIPanel bottom sheet slides in/out smoothly using translateY
+- [ ] No visual regressions — animations should look identical to before, just smoother
+- [ ] SkeletonCard.tsx is NOT modified (it already uses useNativeDriver: true correctly)
+- [ ] No changes to API server, context files, or data files
