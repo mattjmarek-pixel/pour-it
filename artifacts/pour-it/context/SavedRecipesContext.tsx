@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Recipe, Product, AppMode } from '@/src/data/recipes';
+import { migrateSavedRecipe } from '@/src/services/savedRecipesMigration';
 
 export interface SavedRecipe {
   recipe: Recipe;
@@ -30,11 +31,16 @@ export function SavedRecipesProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((data) => {
-      if (data) {
-        try {
-          setSavedRecipes(JSON.parse(data));
-        } catch {}
-      }
+      if (!data) return;
+      try {
+        const parsed: unknown = JSON.parse(data);
+        if (!Array.isArray(parsed)) return;
+        const migrated = parsed
+          .map(migrateSavedRecipe)
+          .filter((s): s is SavedRecipe => s !== null);
+        setSavedRecipes(migrated);
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(migrated)).catch(() => {});
+      } catch {}
     });
   }, []);
 

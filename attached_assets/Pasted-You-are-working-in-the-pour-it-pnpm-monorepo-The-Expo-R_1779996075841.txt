@@ -1,0 +1,207 @@
+You are working in the "pour-it" pnpm monorepo. The Expo/React Native mobile app lives at artifacts/pour-it/ and the API server lives at artifacts/api-server/. 
+
+Your task is to migrate the app from a static hardcoded recipe list to a three-tier recipe system: Canonical, Craft, and AI-Generated. This touches the data layer, API server, and mobile UI. Work through each phase in order and verify each phase compiles before moving to the next.
+
+---
+
+## PHASE 1 — RESTRUCTURE THE DATA MODEL
+
+### 1a. Update the Recipe type
+
+In artifacts/pour-it/src/data/recipes.ts, update the Recipe interface to:
+
+interface Recipe {
+  id: string;
+  title: string;
+  description: string;
+  tier: 'canonical' | 'craft' | 'ai';
+  ingredients: { amount: string; unit: string; name: string }[];
+  steps: string[];
+  tags: string[];
+}
+
+interface Product {
+  id: string;
+  name: string;
+  brand: string;
+  category: 'spirits' | 'thc' | 'mocktails';
+  spiritType: string;        // e.g. "gin", "rum", "vodka", "cannabis seltzer", "botanical spirit"
+  flavorNotes: string[];     // e.g. ["cucumber", "floral", "citrus"]
+  recipes: Recipe[];
+}
+
+### 1b. Reclassify all existing recipes
+
+For every product in the existing recipes.ts data, reclassify each of its 3 existing recipes:
+- The most classic/well-known recipe → tier: 'canonical'
+- The more interesting variation → tier: 'craft'  
+- The most experimental existing recipe → tier: 'ai' (these will eventually be replaced by live AI generation but serve as placeholders now)
+
+Add spiritType and flavorNotes fields to each product using your knowledge of the brand. Examples:
+- Hendricks Gin → spiritType: "gin", flavorNotes: ["cucumber", "rose", "juniper"]
+- Bacardi Rum → spiritType: "white rum", flavorNotes: ["light", "sweet", "vanilla"]
+- Seedlip Spice 94 → spiritType: "non-alcoholic spirit", flavorNotes: ["allspice", "cardamom", "citrus"]
+- Cann Social Tonic → spiritType: "cannabis seltzer", flavorNotes: ["lemon", "ginger", "light"]
+
+Also add an id field to every product and recipe (use slugified name, e.g. "hendricks-gin", "hendricks-classic-gt").
+
+---
+
+## PHASE 2 — API SERVER: AI RECIPE GENERATION ENDPOINT
+
+In artifacts/api-server/src/routes/, create a new file recipes.ts with a POST endpoint:
+
+POST /api/recipes/generate
+
+Request body:
+{
+  productName: string;
+  spiritType: string;
+  flavorNotes: string[];
+  category: 'spirits' | 'thc' | 'mocktails';
+  existingRecipeTitles: string[];   // to avoid duplicating canonical/craft recipes
+}
+
+Response: SSE stream (same pattern as the existing /api/claude-stream endpoint)
+
+The system prompt for Claude should be:
+
+"You are an expert mixologist and drinks consultant. Generate one creative cocktail recipe. 
+Return ONLY valid JSON matching this exact schema, no other text:
+{
+  \"title\": string,
+  \"description\": string (one sentence, evocative),
+  \"ingredients\": [{ \"amount\": string, \"unit\": string, \"name\": string }],
+  \"steps\": string[],
+  \"tags\": string[]
+}
+Rules:
+- The recipe must be achievable with home bar tools
+- Ingredients must be real and purchasable
+- Steps must be clear and numbered
+- Tags should include flavor profile words (e.g. 'citrusy', 'smoky', 'refreshing')
+- Do NOT replicate these existing recipes: {existingRecipeTitles}
+- Category context: {category} (for mocktails, use zero-alcohol ingredients only; for THC, the base product is a cannabis beverage)"
+
+Use non-streaming JSON response (not SSE) for simplicity — parse the full response and return it as JSON. This makes it easier to cache on the client.
+
+Mount the new router in artifacts/api-server/src/routes/index.ts:
+  import recipesRouter from './recipes';
+  router.use('/recipes', recipesRouter);
+
+---
+
+## PHASE 3 — CLIENT: RECIPE CACHING SERVICE
+
+Create artifacts/pour-it/src/services/recipeCache.ts:
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CACHE_VERSION = 'v1';
+const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+interface CachedRecipe {
+  recipe: Recipe;
+  cachedAt: number;
+}
+
+export async function getCachedAIRecipe(productId: string): Promise<Recipe | null> {
+  try {
+    const key = `ai_recipe:${CACHE_VERSION}:${productId}`;
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    const cached: CachedRecipe = JSON.parse(raw);
+    if (Date.now() - cached.cachedAt > TTL_MS) {
+      await AsyncStorage.removeItem(key);
+      return null;
+    }
+    return cached.recipe;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedAIRecipe(productId: string, recipe: Recipe): Promise<void> {
+  try {
+    const key = `ai_recipe:${CACHE_VERSION}:${productId}`;
+    const cached: CachedRecipe = { recipe, cachedAt: Date.now() };
+    await AsyncStorage.setItem(key, JSON.stringify(cached));
+  } catch {}
+}
+
+---
+
+## PHASE 4 — CLIENT: AI RECIPE FETCHING IN RECIPELIST
+
+In artifacts/pour-it/components/RecipeList.tsx:
+
+Add a useEffect that runs when the component mounts for any product:
+
+1. Check the cache first: const cached = await getCachedAIRecipe(product.id)
+2. If cached → append it to the recipes list with tier: 'ai', no network call needed
+3. If not cached → call POST /api/recipes/generate with the product's spiritType, flavorNotes, category, and existingRecipeTitles
+4. Parse the JSON response into a Recipe object with tier: 'ai' and id: `${product.id}-ai-generated`
+5. Cache it: await setCachedAIRecipe(product.id, aiRecipe)
+6. Append it to the end of the recipes list
+
+While the AI recipe is loading, show a single SkeletonCard at the bottom of the list with a label "Generating AI recipe..." in muted text below it.
+
+If the fetch fails, silently skip — do not show an error for AI recipe generation failure, just show the canonical and craft recipes only.
+
+---
+
+## PHASE 5 — UI: RECIPE TIER BADGES
+
+In artifacts/pour-it/components/RecipeList.tsx, add a tier badge to each recipe card header:
+
+Tier badge styles:
+- canonical → label "CLASSIC", backgroundColor: 'rgba(212,168,67,0.15)', color: '#D4A843', borderColor: 'rgba(212,168,67,0.3)'
+- craft → label "CRAFT", backgroundColor: 'rgba(255,255,255,0.06)', color: '#9CA3AF', borderColor: 'rgba(255,255,255,0.1)'  
+- ai → label "AI", backgroundColor: 'rgba(124,58,237,0.15)', color: '#7C3AED', borderColor: 'rgba(124,58,237,0.3)'
+
+Badge component (inline, no separate file needed):
+  <View style={[styles.badge, tierStyles[recipe.tier]]}>
+    <Text style={[styles.badgeText, { color: tierColors[recipe.tier] }]}>
+      {tierLabels[recipe.tier]}
+    </Text>
+  </View>
+
+Badge styles: paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100, borderWidth: 1, fontSize: 10, fontFamily: 'DMSans_600SemiBold', letterSpacing: 0.8
+
+Recipes must render in tier order: canonical first, craft second, ai last. Sort the recipes array before rendering:
+  const tierOrder = { canonical: 0, craft: 1, ai: 2 };
+  const sorted = [...recipes].sort((a, b) => tierOrder[a.tier] - tierOrder[b.tier]);
+
+---
+
+## PHASE 6 — PRODUCT GRID: EXPAND THE CATALOG
+
+In artifacts/pour-it/src/data/recipes.ts, add 6 new products per mode (18 total new products, 54 new recipes) to bring the catalog to 36 products total. Choose well-known, purchasable brands:
+
+Spirits additions (6): e.g. Grey Goose Vodka, Tanqueray Gin, Diplomatico Rum, Don Julio Blanco, Bulleit Bourbon, Monkey Shoulder Scotch
+
+THC additions (6): e.g. Wynk THC Seltzer, Cycling Frog THC Seltzer, Artet Cannabis Aperitif, Wunder Higher Vibes, Pamos THC Sparkling Water, Sunmed CBD Sparkling Water
+
+Mocktails additions (6): e.g. Ritual Zero Proof Whiskey, Aplós Arise, Free Spirits Bourbon, Lyre's Dark Cane Spirit, Proxies Wine Alternative, Kin Euphorics
+
+For each new product, write:
+- 1 canonical recipe (the most classic serve for that spirit type)
+- 1 craft recipe (an interesting bartender riff)
+- Leave tier 'ai' recipe slot empty — it will be AI-generated at runtime
+
+---
+
+## SUCCESS CRITERIA
+
+- [ ] All existing recipes reclassified into canonical/craft/ai tiers with correct badges showing in UI
+- [ ] Recipes always render in order: canonical → craft → ai
+- [ ] POST /api/recipes/generate endpoint returns valid Recipe JSON
+- [ ] AI recipe generates correctly for at least one product in testing
+- [ ] AI recipes are cached in AsyncStorage and do not re-fetch within 7 days
+- [ ] SkeletonCard shows while AI recipe is loading
+- [ ] Failed AI generation is silent — canonical and craft recipes still show
+- [ ] 18 new products added across 3 modes (6 per mode)
+- [ ] All tier badges render with correct colors matching the design system
+- [ ] pnpm typecheck passes with no new errors
+- [ ] No changes to EmptyState.tsx, SkeletonCard.tsx, ErrorBoundary.tsx, or ErrorFallback.tsx
+- [ ] No changes to useNativeDriver settings

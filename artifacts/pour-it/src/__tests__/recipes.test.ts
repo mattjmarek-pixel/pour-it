@@ -1,20 +1,21 @@
 import { PRODUCTS, CATEGORIES } from '../data/recipes';
-import type { AppMode } from '../data/recipes';
+import type { AppMode, RecipeTier } from '../data/recipes';
 
 const MODES: AppMode[] = ['spirits', 'thc', 'mocktails'];
+const VALID_TIERS: RecipeTier[] = ['canonical', 'craft', 'ai'];
 
 describe('PRODUCTS data integrity', () => {
   it('contains all 3 modes', () => {
     expect(Object.keys(PRODUCTS).sort()).toEqual(['mocktails', 'spirits', 'thc']);
   });
 
-  it.each(MODES)('%s has exactly 6 products', (mode) => {
-    expect(PRODUCTS[mode]).toHaveLength(6);
+  it.each(MODES)('%s has exactly 12 products', (mode) => {
+    expect(PRODUCTS[mode]).toHaveLength(12);
   });
 
-  it.each(MODES)('%s products each have exactly 3 recipes', (mode) => {
+  it.each(MODES)('%s products each have at least 2 recipes', (mode) => {
     for (const product of PRODUCTS[mode]) {
-      expect(product.recipes).toHaveLength(3);
+      expect(product.recipes.length).toBeGreaterThanOrEqual(2);
     }
   });
 
@@ -25,11 +26,20 @@ describe('PRODUCTS data integrity', () => {
     }
   });
 
-  it('no recipe has an empty name', () => {
+  it('every product has spiritType and flavorNotes populated', () => {
+    for (const mode of MODES) {
+      for (const product of PRODUCTS[mode]) {
+        expect(product.spiritType.trim().length).toBeGreaterThan(0);
+        expect(product.flavorNotes.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('no recipe has an empty title', () => {
     for (const mode of MODES) {
       for (const product of PRODUCTS[mode]) {
         for (const recipe of product.recipes) {
-          expect(recipe.name.trim().length).toBeGreaterThan(0);
+          expect(recipe.title.trim().length).toBeGreaterThan(0);
         }
       }
     }
@@ -40,6 +50,18 @@ describe('PRODUCTS data integrity', () => {
       for (const product of PRODUCTS[mode]) {
         for (const recipe of product.recipes) {
           expect(recipe.ingredients.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it('every ingredient has a non-empty name', () => {
+    for (const mode of MODES) {
+      for (const product of PRODUCTS[mode]) {
+        for (const recipe of product.recipes) {
+          for (const ing of recipe.ingredients) {
+            expect(ing.name.trim().length).toBeGreaterThan(0);
+          }
         }
       }
     }
@@ -67,13 +89,22 @@ describe('PRODUCTS data integrity', () => {
     expect(new Set(allIds).size).toBe(allIds.length);
   });
 
-  it('all difficulty values are valid', () => {
-    const valid = new Set(['easy', 'medium', 'hard']);
+  it('all tier values are valid', () => {
+    const valid = new Set<RecipeTier>(VALID_TIERS);
     for (const mode of MODES) {
       for (const product of PRODUCTS[mode]) {
         for (const recipe of product.recipes) {
-          expect(valid.has(recipe.difficulty)).toBe(true);
+          expect(valid.has(recipe.tier)).toBe(true);
         }
+      }
+    }
+  });
+
+  it('every product has at least one canonical recipe', () => {
+    for (const mode of MODES) {
+      for (const product of PRODUCTS[mode]) {
+        const canonical = product.recipes.filter((r) => r.tier === 'canonical');
+        expect(canonical.length).toBeGreaterThanOrEqual(1);
       }
     }
   });

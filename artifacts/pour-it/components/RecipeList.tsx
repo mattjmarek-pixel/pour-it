@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   LayoutAnimation,
@@ -15,18 +15,34 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { SkeletonCard } from '@/components/SkeletonCard';
 import { useSavedRecipes } from '@/context/SavedRecipesContext';
-import type { AppMode, Recipe, Product } from '@/src/data/recipes';
+import type { AppMode, Recipe, RecipeTier, Product } from '@/src/data/recipes';
+import { getCachedAIRecipe, setCachedAIRecipe } from '@/src/services/recipeCache';
 import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: '#10B981',
-  medium: '#F59E0B',
-  hard: '#EF4444',
+const TIER_ORDER: Record<RecipeTier, number> = { canonical: 0, craft: 1, ai: 2 };
+
+const TIER_LABELS: Record<RecipeTier, string> = {
+  canonical: 'CLASSIC',
+  craft: 'CRAFT',
+  ai: 'AI',
+};
+
+const TIER_STYLES: Record<RecipeTier, { backgroundColor: string; borderColor: string }> = {
+  canonical: { backgroundColor: 'rgba(212,168,67,0.15)', borderColor: 'rgba(212,168,67,0.3)' },
+  craft: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)' },
+  ai: { backgroundColor: 'rgba(124,58,237,0.15)', borderColor: 'rgba(124,58,237,0.3)' },
+};
+
+const TIER_COLORS: Record<RecipeTier, string> = {
+  canonical: '#D4A843',
+  craft: '#9CA3AF',
+  ai: '#7C3AED',
 };
 
 interface RecipeCardProps {
@@ -43,6 +59,7 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
   const { saveRecipe, unsaveRecipe, isRecipeSaved } = useSavedRecipes();
   const saved = isRecipeSaved(recipe.id);
   const scale = useRef(new Animated.Value(1)).current;
+  const tierStyle = TIER_STYLES[recipe.tier];
 
   const toggle = () => {
     safeSelection();
@@ -64,22 +81,23 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
         onPress={toggle}
         onPressIn={() => Animated.spring(scale, { toValue: 0.98, useNativeDriver: true }).start()}
         onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
-        accessibilityLabel={`${recipe.name}, ${recipe.difficulty}, ${recipe.time}. ${isExpanded ? 'Tap to collapse' : 'Tap to expand'}`}
+        accessibilityLabel={`${recipe.title}, ${TIER_LABELS[recipe.tier]} recipe. ${isExpanded ? 'Tap to collapse' : 'Tap to expand'}`}
         accessibilityRole="button"
         accessible
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
-            <Text style={styles.recipeName}>{recipe.name}</Text>
+            <Text style={styles.recipeName}>{recipe.title}</Text>
             <View style={styles.metaRow}>
-              <View style={[styles.badge, { backgroundColor: `${DIFFICULTY_COLORS[recipe.difficulty]}22` }]}>
-                <Text style={[styles.badgeText, { color: DIFFICULTY_COLORS[recipe.difficulty] }]}>
-                  {recipe.difficulty}
+              <View
+                style={[
+                  styles.tierBadge,
+                  { backgroundColor: tierStyle.backgroundColor, borderColor: tierStyle.borderColor },
+                ]}
+              >
+                <Text style={[styles.tierBadgeText, { color: TIER_COLORS[recipe.tier] }]}>
+                  {TIER_LABELS[recipe.tier]}
                 </Text>
-              </View>
-              <View style={styles.timePill}>
-                <Feather name="clock" size={11} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.timeText}>{recipe.time}</Text>
               </View>
             </View>
             <View style={styles.tags}>
@@ -126,12 +144,16 @@ function RecipeCard({ recipe, product, mode, accentColor, isExpanded, onToggle, 
       {isExpanded && (
         <View style={[styles.expandedContent, { borderTopColor: `${accentColor}30` }]}>
           <Text style={[styles.sectionTitle, { color: accentColor }]}>Ingredients</Text>
-          {recipe.ingredients.map((ing, i) => (
-            <View key={i} style={styles.ingredient}>
-              <View style={[styles.dot, { backgroundColor: accentColor }]} />
-              <Text style={styles.ingredientText}>{ing}</Text>
-            </View>
-          ))}
+          {recipe.ingredients.map((ing, i) => {
+            const measure = [ing.amount, ing.unit].filter(Boolean).join(' ').trim();
+            const label = measure ? `${measure} ${ing.name}` : ing.name;
+            return (
+              <View key={i} style={styles.ingredient}>
+                <View style={[styles.dot, { backgroundColor: accentColor }]} />
+                <Text style={styles.ingredientText}>{label}</Text>
+              </View>
+            );
+          })}
 
           <Text style={[styles.sectionTitle, { color: accentColor, marginTop: 16 }]}>Steps</Text>
           {recipe.steps.map((step, i) => (
@@ -170,6 +192,83 @@ interface RecipeListProps {
 export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }: RecipeListProps) {
   const insets = useSafeAreaInsets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAiRecipe(null);
+    setAiLoading(false);
+
+    const hasStaticAI = product.recipes.some((r) => r.tier === 'ai');
+    if (hasStaticAI) return;
+
+    (async () => {
+      const cached = await getCachedAIRecipe(product.id);
+      if (cancelled) return;
+      if (cached) {
+        setAiRecipe(cached);
+        return;
+      }
+
+      setAiLoading(true);
+      try {
+        const domain = process.env.EXPO_PUBLIC_DOMAIN;
+        if (!domain) return;
+        const res = await fetch(`https://${domain}/api/recipes/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productName: product.name,
+            spiritType: product.spiritType,
+            flavorNotes: product.flavorNotes,
+            category: mode,
+            existingRecipeTitles: product.recipes.map((r) => r.title),
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          title?: string;
+          description?: string;
+          ingredients?: { amount: string; unit: string; name: string }[];
+          steps?: string[];
+          tags?: string[];
+        };
+        if (
+          !data.title ||
+          !data.description ||
+          !Array.isArray(data.ingredients) ||
+          !Array.isArray(data.steps) ||
+          !Array.isArray(data.tags)
+        ) {
+          return;
+        }
+        const generated: Recipe = {
+          id: `${product.id}-ai-generated`,
+          title: data.title,
+          description: data.description,
+          tier: 'ai',
+          ingredients: data.ingredients,
+          steps: data.steps,
+          tags: data.tags,
+        };
+        if (cancelled) return;
+        setAiRecipe(generated);
+        void setCachedAIRecipe(product.id, generated);
+      } catch {
+        // Silent failure — only show static recipes
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes]);
+
+  const combined: Recipe[] = aiRecipe ? [...product.recipes, aiRecipe] : product.recipes;
+  const sortedRecipes = [...combined].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
@@ -191,7 +290,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         </View>
       </View>
 
-      {product.recipes.length === 0 ? (
+      {sortedRecipes.length === 0 && !aiLoading ? (
         <EmptyState
           icon="📖"
           title="No recipes found"
@@ -206,7 +305,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         >
-          {product.recipes.map((recipe) => (
+          {sortedRecipes.map((recipe) => (
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
@@ -218,6 +317,13 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
               onCustomizeAI={onCustomizeAI}
             />
           ))}
+
+          {aiLoading && (
+            <View style={styles.aiLoadingWrap}>
+              <SkeletonCard />
+              <Text style={styles.aiLoadingText}>Generating AI recipe...</Text>
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -310,25 +416,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  badge: {
-    paddingHorizontal: 10,
+  tierBadge: {
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 100,
+    borderWidth: 1,
   },
-  badgeText: {
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 11,
-    textTransform: 'capitalize',
-  },
-  timePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  timeText: {
-    fontFamily: 'DMSans_400Regular',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.4)',
+  tierBadgeText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.8,
   },
   tags: {
     flexDirection: 'row',
@@ -412,5 +509,14 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_600SemiBold',
     fontSize: 14,
     color: '#0A0A0F',
+  },
+  aiLoadingWrap: {
+    gap: 8,
+    alignItems: 'center',
+  },
+  aiLoadingText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.35)',
   },
 });

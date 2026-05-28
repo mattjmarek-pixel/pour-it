@@ -217,7 +217,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
           <View>
             <Text style={styles.panelTitle}>Customize with AI</Text>
             {recipe && (
-              <Text style={[styles.panelSubtitle, { color: accentColor }]}>{recipe.name}</Text>
+              <Text style={[styles.panelSubtitle, { color: accentColor }]}>{recipe.title}</Text>
             )}
           </View>
           <Pressable

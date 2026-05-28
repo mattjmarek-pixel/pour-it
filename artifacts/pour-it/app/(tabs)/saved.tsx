@@ -15,13 +15,31 @@ import { AIPanel } from "@/components/AIPanel";
 import { EmptyState } from "@/components/EmptyState";
 import { MODE_COLORS } from "@/constants/colors";
 import { useSavedRecipes } from "@/context/SavedRecipesContext";
-import type { Recipe } from "@/src/data/recipes";
+import type { Recipe, RecipeTier } from "@/src/data/recipes";
 import { safeImpact } from "@/utils/haptics";
 
-const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: "#10B981",
-  medium: "#F59E0B",
-  hard: "#EF4444",
+const TIER_LABELS: Record<RecipeTier, string> = {
+  canonical: "CLASSIC",
+  craft: "CRAFT",
+  ai: "AI",
+};
+
+const TIER_STYLES: Record<RecipeTier, { backgroundColor: string; borderColor: string; color: string }> = {
+  canonical: {
+    backgroundColor: "rgba(212,168,67,0.15)",
+    borderColor: "rgba(212,168,67,0.3)",
+    color: "#D4A843",
+  },
+  craft: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.1)",
+    color: "#9CA3AF",
+  },
+  ai: {
+    backgroundColor: "rgba(124,58,237,0.15)",
+    borderColor: "rgba(124,58,237,0.3)",
+    color: "#7C3AED",
+  },
 };
 
 const MODE_LABELS: Record<string, string> = {
@@ -89,6 +107,7 @@ export default function SavedScreen() {
 
               {items.map(({ recipe, product }) => {
                 const isExpanded = expandedId === recipe.id;
+                const tierStyle = TIER_STYLES[recipe.tier];
                 return (
                   <Pressable
                     key={recipe.id}
@@ -105,7 +124,7 @@ export default function SavedScreen() {
                         <Text style={styles.emoji}>{product.emoji}</Text>
                         <View style={styles.cardText}>
                           <Text style={styles.recipeName} numberOfLines={1}>
-                            {recipe.name}
+                            {recipe.title}
                           </Text>
                           <Text style={styles.productName} numberOfLines={1}>
                             {product.name}
@@ -124,19 +143,20 @@ export default function SavedScreen() {
                         </Pressable>
                         <View
                           style={[
-                            styles.diffBadge,
+                            styles.tierBadge,
                             {
-                              backgroundColor: `${DIFFICULTY_COLORS[recipe.difficulty]}22`,
+                              backgroundColor: tierStyle.backgroundColor,
+                              borderColor: tierStyle.borderColor,
                             },
                           ]}
                         >
                           <Text
                             style={[
-                              styles.diffText,
-                              { color: DIFFICULTY_COLORS[recipe.difficulty] },
+                              styles.tierBadgeText,
+                              { color: tierStyle.color },
                             ]}
                           >
-                            {recipe.difficulty}
+                            {TIER_LABELS[recipe.tier]}
                           </Text>
                         </View>
                       </View>
@@ -271,15 +291,16 @@ const styles = StyleSheet.create({
   unsaveBtn: {
     padding: 4,
   },
-  diffBadge: {
+  tierBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 100,
+    borderWidth: 1,
   },
-  diffText: {
-    fontFamily: "DMSans_500Medium",
+  tierBadgeText: {
+    fontFamily: "DMSans_600SemiBold",
     fontSize: 10,
-    textTransform: "capitalize",
+    letterSpacing: 0.8,
   },
   expandedArea: {
     marginTop: 14,

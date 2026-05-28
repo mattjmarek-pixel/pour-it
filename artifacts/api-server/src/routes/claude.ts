@@ -10,9 +10,23 @@ router.options("/claude-stream", (req, res) => {
   res.sendStatus(204);
 });
 
+interface RecipeIngredientPayload {
+  amount?: string;
+  unit?: string;
+  name?: string;
+}
+
+interface RecipePayload {
+  title?: string;
+  name?: string;
+  description?: string;
+  ingredients?: (string | RecipeIngredientPayload)[];
+  steps?: string[];
+}
+
 router.post("/claude-stream", async (req, res) => {
   const { recipe, prompt } = req.body as {
-    recipe: { name: string; ingredients: string[]; steps: string[]; description: string };
+    recipe: RecipePayload;
     prompt: string;
   };
 
@@ -20,6 +34,13 @@ router.post("/claude-stream", async (req, res) => {
     res.status(400).json({ error: "recipe and prompt are required" });
     return;
   }
+
+  const recipeTitle = recipe.title ?? recipe.name ?? "Untitled";
+  const ingredientLines = (recipe.ingredients ?? []).map((ing) => {
+    if (typeof ing === "string") return ing;
+    const measure = [ing.amount ?? "", ing.unit ?? ""].filter(Boolean).join(" ").trim();
+    return measure ? `${measure} ${ing.name ?? ""}`.trim() : (ing.name ?? "");
+  });
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -34,10 +55,10 @@ router.post("/claude-stream", async (req, res) => {
     });
 
     const recipeContext = `
-Recipe: ${recipe.name}
-Description: ${recipe.description}
-Ingredients: ${recipe.ingredients.join(", ")}
-Steps: ${recipe.steps.join(" | ")}
+Recipe: ${recipeTitle}
+Description: ${recipe.description ?? ""}
+Ingredients: ${ingredientLines.join(", ")}
+Steps: ${(recipe.steps ?? []).join(" | ")}
     `.trim();
 
     const stream = client.messages.stream({
