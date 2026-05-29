@@ -48,7 +48,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Vodka',
       spiritType: 'vodka',
       flavorNotes: ['clean', 'neutral', 'smooth'],
-      barcodes: ['085592100141'],
+      barcodes: ['0080432402481'],
       recipes: [
         {
           id: 'svedka-midnight-martini',
@@ -421,7 +421,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Rum',
       spiritType: 'white rum',
       flavorNotes: ['light', 'sweet', 'vanilla'],
-      barcodes: ['0080432400265'],
+      barcodes: ['0080958000404'],
       recipes: [
         {
           id: 'bacardi-classic-daiquiri',
@@ -543,7 +543,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Gin',
       spiritType: 'gin',
       flavorNotes: ['cucumber', 'rose', 'juniper'],
-      barcodes: ['0088076179075'],
+      barcodes: ['0088076181258'],
       recipes: [
         {
           id: 'hendricks-classic-gt',
@@ -693,6 +693,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       category: 'Bourbon',
       spiritType: 'bourbon',
       flavorNotes: ['caramel', 'wheat', 'vanilla'],
+      barcodes: ['0087000002017'],
       recipes: [
         {
           id: 'makers-manhattan',

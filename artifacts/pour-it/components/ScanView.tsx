@@ -259,7 +259,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
           },
         ]}
       >
-        <ScanToast message="Product not found" visible={toastVisible} />
+        <ScanToast message="Product not found — try browsing manually" visible={toastVisible} />
       </View>
 
       {/* Browse manually link */}
