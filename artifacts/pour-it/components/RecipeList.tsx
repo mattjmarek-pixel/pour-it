@@ -284,7 +284,15 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         <View style={styles.headerInfo}>
           <Text style={styles.emoji}>{product.emoji}</Text>
           <View>
-            <Text style={styles.productName}>{product.name}</Text>
+            <View style={styles.productNameRow}>
+              <Text style={styles.productName}>{product.name}</Text>
+              {product.aiGenerated && (
+                <View style={styles.aiGeneratedBadge}>
+                  <Feather name="zap" size={10} color="#7C3AED" />
+                  <Text style={styles.aiGeneratedText}>AI Generated</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.changeProduct, { color: accentColor }]}>Change product</Text>
           </View>
         </View>
@@ -364,6 +372,29 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     letterSpacing: -0.2,
+  },
+  productNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  aiGeneratedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 100,
+    backgroundColor: 'rgba(124,58,237,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.3)',
+  },
+  aiGeneratedText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: '#7C3AED',
   },
   changeProduct: {
     fontFamily: 'DMSans_400Regular',

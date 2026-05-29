@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ScanToast } from '@/components/ScanToast';
-import type { AppMode, Product } from '@/src/data/recipes';
+import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { PRODUCTS } from '@/src/data/recipes';
 import { safeNotification } from '@/utils/haptics';
 
@@ -26,6 +26,36 @@ interface ScanViewProps {
   accentColor: string;
   onProductFound: (product: Product) => void;
   onBrowseManually: () => void;
+}
+
+const MODE_EMOJI: Record<AppMode, string> = {
+  spirits: '🍸',
+  thc: '🌿',
+  mocktails: '🍹',
+};
+
+interface IdentifyAIRecipe {
+  title: string;
+  description: string;
+  ingredients: { amount: string; unit: string; name: string }[];
+  steps: string[];
+  tags: string[];
+}
+
+type IdentifyResponse =
+  | { status: 'not_a_drink' }
+  | { status: 'matched'; productId: string }
+  | {
+      status: 'ai';
+      product: { name: string; brand: string; category: string; recipes: IdentifyAIRecipe[] };
+    }
+  | { status: 'not_found' };
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 const RETICLE_WIDTH = 280;
@@ -44,8 +74,11 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   const [scanned, setScanned] = useState(false);
   const [torch, setTorch] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Product not found — try browsing manually');
+  const [identifying, setIdentifying] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
+  const cameraRef = useRef<CameraView>(null);
 
   const cornerOpacity = useRef(new Animated.Value(0.6)).current;
 
@@ -111,9 +144,114 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       return;
     }
 
-    safeNotification(Haptics.NotificationFeedbackType.Warning);
+    // No barcode match — fall back to AI vision identification.
+    void identifyWithVision();
+  };
+
+  const showToast = (message: string, ms: number) => {
+    setToastMessage(message);
     setToastVisible(true);
-    resetAfter(2000);
+    safeNotification(Haptics.NotificationFeedbackType.Warning);
+    resetAfter(ms);
+  };
+
+  const identifyWithVision = async () => {
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    if (!domain || !cameraRef.current) {
+      showToast('Product not found — try browsing manually', 2400);
+      return;
+    }
+
+    setIdentifying(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.5,
+        skipProcessing: true,
+      });
+      if (!photo?.base64) {
+        showToast('Product not found — try browsing manually', 2400);
+        return;
+      }
+
+      const hints = PRODUCTS[mode].map((p) => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+      }));
+
+      const res = await fetch(`https://${domain}/api/identify-bottle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: photo.base64, products: hints }),
+      });
+      if (!res.ok) {
+        showToast('Product not found — try browsing manually', 2400);
+        return;
+      }
+
+      const data = (await res.json()) as IdentifyResponse;
+
+      if (data.status === 'not_a_drink') {
+        showToast("This doesn't look like a drink — please scan a beverage", 2800);
+        return;
+      }
+
+      if (data.status === 'matched') {
+        const matched = PRODUCTS[mode].find((p) => p.id === data.productId);
+        if (matched) {
+          safeNotification(Haptics.NotificationFeedbackType.Success);
+          onProductFound(matched);
+          return;
+        }
+        showToast('Product not found — try browsing manually', 2400);
+        return;
+      }
+
+      if (data.status === 'ai' && data.product.recipes.length > 0) {
+        const aiProduct = buildAIProduct(data.product);
+        safeNotification(Haptics.NotificationFeedbackType.Success);
+        onProductFound(aiProduct);
+        return;
+      }
+
+      showToast('Product not found — try browsing manually', 2400);
+    } catch {
+      showToast('Product not found — try browsing manually', 2400);
+    } finally {
+      setIdentifying(false);
+    }
+  };
+
+  const buildAIProduct = (aiProduct: {
+    name: string;
+    brand: string;
+    category: string;
+    recipes: IdentifyAIRecipe[];
+  }): Product => {
+    const baseSlug = slugify(aiProduct.name) || 'ai-product';
+    const recipes: Recipe[] = aiProduct.recipes.slice(0, 3).map((r, i) => ({
+      id: `ai-${baseSlug}-${i}`,
+      title: r.title,
+      description: r.description,
+      tier: 'ai',
+      ingredients: r.ingredients,
+      steps: r.steps,
+      tags: r.tags,
+    }));
+
+    return {
+      id: `ai-${baseSlug}-${Date.now()}`,
+      name: aiProduct.name,
+      brand: aiProduct.brand,
+      emoji: MODE_EMOJI[mode],
+      category: aiProduct.category,
+      spiritType: aiProduct.brand || aiProduct.category,
+      flavorNotes: [],
+      aiGenerated: true,
+      recipes,
+    };
   };
 
   const resetAfter = (ms: number) => {
@@ -189,6 +327,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   return (
     <View style={styles.root}>
       <CameraView
+        ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
         active={isFocused}
@@ -248,6 +387,16 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
         </Pressable>
       </View>
 
+      {/* Identifying overlay while Claude Vision runs */}
+      {identifying && (
+        <View pointerEvents="none" style={styles.identifyingOverlay}>
+          <View style={styles.identifyingCard}>
+            <ActivityIndicator color={accentColor} />
+            <Text style={styles.identifyingText}>Identifying with AI…</Text>
+          </View>
+        </View>
+      )}
+
       {/* Toast above the browse-manually link */}
       <View
         pointerEvents="none"
@@ -259,7 +408,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
           },
         ]}
       >
-        <ScanToast message="Product not found — try browsing manually" visible={toastVisible} />
+        <ScanToast message={toastMessage} visible={toastVisible} />
       </View>
 
       {/* Browse manually link */}
@@ -392,6 +541,28 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+  },
+  identifyingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  identifyingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(10,10,15,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  identifyingText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
   },
   bottomBar: {
     position: 'absolute',

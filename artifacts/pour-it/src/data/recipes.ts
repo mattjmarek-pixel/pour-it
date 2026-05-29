@@ -26,6 +26,7 @@ export interface Product {
   spiritType: string;
   flavorNotes: string[];
   barcodes?: string[];
+  aiGenerated?: boolean;
   recipes: Recipe[];
 }
 
