@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
@@ -38,6 +39,7 @@ const MODE_LABELS: Record<AppMode, string> = {
 
 export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }: ScanViewProps) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [torch, setTorch] = useState(false);
@@ -189,6 +191,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
+        active={isFocused}
         enableTorch={torch}
         barcodeScannerSettings={{
           barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
