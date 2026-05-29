@@ -1,0 +1,211 @@
+# Replit Agent Prompt: Fix Camera, Scan, Animation & Dependency Issues in pour-it
+
+You are fixing three confirmed bugs in the `pour-it` pnpm monorepo (Expo SDK 54 / React Native). Work through each section in order. Do not skip any step.
+
+---
+
+## Section 1 — Fix Metro resolver for pnpm workspaces
+
+**Problem:** `expo-camera` is installed but Metro cannot resolve it because pnpm uses symlinked `node_modules`. The camera silently falls back to fake random-product scanning.
+
+**Steps:**
+
+1. Open (or create) `artifacts/pour-it/metro.config.js` and replace its entire contents with:
+
+```js
+const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
+
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '../..');
+
+const config = getDefaultConfig(projectRoot);
+
+config.watchFolders = [workspaceRoot];
+
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
+
+config.resolver.disableHierarchicalLookup = false;
+
+module.exports = config;
+```
+
+2. Open the root `.npmrc` file (create it if it doesn't exist) and ensure it contains:
+
+```
+shamefully-hoist=true
+public-hoist-pattern[]=*expo*
+public-hoist-pattern[]=*react-native*
+public-hoist-pattern[]=*react*
+```
+
+3. Run `pnpm install` from the repo root to re-flatten the lockfile.
+
+---
+
+## Section 2 — Fix @replit/connectors-sdk dependency scope
+
+**Problem:** `@replit/connectors-sdk` is in the root `package.json` but is only needed by `artifacts/api-server`.
+
+**Steps:**
+
+1. Open root `package.json`. Remove `@replit/connectors-sdk` from `dependencies` entirely.
+
+2. Open `artifacts/api-server/package.json`. Add it there instead:
+
+```json
+"dependencies": {
+  "@replit/connectors-sdk": "^0.4.0"
+}
+```
+
+3. Run `pnpm install` from the repo root.
+
+---
+
+## Section 3 — Replace fake scan with real expo-camera barcode scanning
+
+**Problem:** `ScanView.tsx` uses a fake tap-to-scan fallback that picks a random product.
+
+**Steps:**
+
+1. Open `artifacts/pour-it/components/ScanView.tsx`.
+
+2. Remove all fake/simulated scan logic (random product selection and setTimeout fallback).
+
+3. Replace the camera section with:
+
+```tsx
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useIsFocused } from '@react-navigation/native';
+import { useRef } from 'react';
+
+export function ScanView({ onProductScanned }: { onProductScanned: (barcode: string) => void }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const isFocused = useIsFocused();
+  const scannedRef = useRef(false);
+
+  function handleBarcode({ data }: { data: string }) {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    onProductScanned(data);
+    setTimeout(() => { scannedRef.current = false; }, 3000);
+  }
+
+  if (!permission) return null;
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>Camera access is needed to scan bottles.</Text>
+        <Pressable onPress={requestPermission} style={styles.permissionButton}>
+          <Text style={styles.permissionButtonText}>Allow Camera</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <CameraView
+      style={StyleSheet.absoluteFillObject}
+      facing="back"
+      active={isFocused}
+      barcodeScannerSettings={{
+        barcodeTypes: ['ean13', 'upc_a', 'upc_e', 'qr'],
+      }}
+      onBarcodeScanned={handleBarcode}
+    />
+  );
+}
+```
+
+4. Keep all existing viewfinder overlay UI — only replace the camera/scan logic.
+
+5. In `ModeScreen.tsx`, update the barcode handler to look up the product in `src/data/recipes.ts`. If no match is found, show a "Product not found" message.
+
+---
+
+## Section 4 — Fix animations: useNativeDriver
+
+**Problem:** All animations use `useNativeDriver: false`, which runs on the JS thread and freezes the camera when a scan fires.
+
+**Rule:** Only `opacity` and `transform` (translate, scale, rotate) support `useNativeDriver: true`. Animations of `width`, `height`, or `backgroundColor` must remain `false` — refactor those to use transform equivalents.
+
+**Steps:**
+
+1. `ScanView.tsx` — switch scan-line animation to `transform: [{ translateY: scanAnim }]` and set `useNativeDriver: true`. Do the same for any pulse/opacity animations.
+
+2. `ProductGrid.tsx` — change all fade-in opacity animations to `useNativeDriver: true`.
+
+3. `RecipeList.tsx` — flip all opacity/transform animations to `useNativeDriver: true`.
+
+4. `AIPanel.tsx` — the bottom-sheet uses `transform: translateY`, change to `useNativeDriver: true`.
+
+5. Search the entire `artifacts/pour-it` directory for remaining `useNativeDriver: false` instances. Only leave `false` where the animation genuinely drives a layout property that cannot be refactored to transform.
+
+---
+
+## Section 5 — Fix Spirits tab: prevent camera freeze on tab switch
+
+**Problem:** Every tab switch causes `ModeScreen` to remount, re-initializing the camera and animations simultaneously, causing a visible freeze.
+
+**Steps:**
+
+1. Open `artifacts/pour-it/app/(tabs)/_layout.tsx`.
+
+2. Add `unmountOnBlur: false` to the Spirits, THC, and Mocktails tab screen options:
+
+```tsx
+<Tabs.Screen
+  name="spirits"
+  options={{
+    unmountOnBlur: false,
+    title: 'Spirits',
+    // ... existing options
+  }}
+/>
+<Tabs.Screen
+  name="thc"
+  options={{
+    unmountOnBlur: false,
+    title: 'THC',
+    // ... existing options
+  }}
+/>
+<Tabs.Screen
+  name="mocktails"
+  options={{
+    unmountOnBlur: false,
+    title: 'Mocktails',
+    // ... existing options
+  }}
+/>
+```
+
+3. The `active={isFocused}` prop added in Section 3 already pauses the camera when the tab is not visible — no further changes needed.
+
+---
+
+## Section 6 — Verify and test
+
+1. From `artifacts/pour-it`, run: `npx expo start --clear`
+2. Confirm no Metro resolution errors for `expo-camera` in terminal output.
+3. On a physical device:
+   - Go to Spirits tab — camera viewfinder should open without freezing.
+   - Point at a barcode — should resolve without a tap.
+   - Switch between tabs several times — camera should resume instantly.
+4. Run `npx expo-doctor` and confirm zero warnings.
+
+---
+
+## Success criteria
+
+- Barcode scanning works on a real device (no silent fallback to random product)
+- No camera freeze when entering the Spirits / THC / Mocktails tabs
+- No Metro resolution errors in terminal
+- All animations run at 60fps on native
+- `@replit/connectors-sdk` appears only in `artifacts/api-server/package.json`
+- `npx expo-doctor` passes cleanly
