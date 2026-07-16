@@ -1,0 +1,60 @@
+In artifacts/pour-it/components/AIPanel.tsx, make these changes:
+
+1. Import Modal from 'react-native' (add to the existing react-native import list).
+
+2. Wrap the existing return value — the `<View style={styles.overlay}>...</View>` 
+   currently returned — inside a React Native <Modal> component:
+   
+   <Modal
+     visible={visible}
+     transparent
+     animationType="none"
+     onRequestClose={onClose}
+   >
+     {/* existing overlay + Animated.View panel content goes here, unchanged */}
+   </Modal>
+
+   Keep the existing custom Animated slide-in logic as-is inside the Modal — 
+   don't replace it, just nest it.
+
+3. Inside the Modal, wrap the panel's content (the Animated.View with 
+   styles.panel) in a KeyboardAvoidingView:
+
+   <KeyboardAvoidingView
+     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+     style={{ flex: 1, justifyContent: 'flex-end' }}
+   >
+     <Animated.View style={[styles.panel, ...]}>
+       {/* existing panel content */}
+     </Animated.View>
+   </KeyboardAvoidingView>
+
+   Import KeyboardAvoidingView from 'react-native' if not already imported.
+
+4. In the `panel` style, change the bottom padding to account for the tab bar 
+   and home indicator when the keyboard is NOT open. Update:
+
+   padding: 24,
+   paddingTop: 12,
+
+   to:
+
+   padding: 24,
+   paddingTop: 12,
+   paddingBottom: 24, // keep as-is, KeyboardAvoidingView handles keyboard case
+
+   (No change needed here if insets.bottom is already applied elsewhere — 
+   check how `insets` from useSafeAreaInsets is currently used in the 
+   component and add insets.bottom to the panel's bottom padding if it 
+   is not already applied.)
+
+5. Fix the harmless but pointless line: 
+   onPress={error ? handleStream : handleStream}
+   to:
+   onPress={handleStream}
+
+After making changes, run:
+grep -n "Modal\|KeyboardAvoidingView\|insets.bottom" artifacts/pour-it/components/AIPanel.tsx
+
+and paste the output so we can verify the Modal wrapper, KeyboardAvoidingView, 
+and safe-area padding are all correctly in place.

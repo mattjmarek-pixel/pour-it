@@ -5,6 +5,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Keyboard,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -196,17 +198,23 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
   if (!visible && (slideAnim as unknown as { _value: number })._value === 0) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { pointerEvents: visible ? 'auto' : 'none' }]}>
-      <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close AI panel" />
-      </Animated.View>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: visible ? 'auto' : 'none' }]}>
+        <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close AI panel" />
+        </Animated.View>
 
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          pointerEvents="box-none"
+        >
       <Animated.View
         style={[
           styles.panel,
           {
             borderColor: accentColor,
-            paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0),
+            paddingBottom: insets.bottom + 24 + (Platform.OS === 'web' ? 34 : 0),
             transform: [{ translateY }],
           },
         ]}
@@ -248,7 +256,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
             styles.generateBtn,
             { backgroundColor: streaming ? `${accentColor}66` : accentColor },
           ]}
-          onPress={error ? handleStream : handleStream}
+          onPress={handleStream}
           disabled={streaming}
           accessibilityLabel={streaming ? 'Generating recipe variation' : 'Generate variation'}
           accessibilityRole="button"
@@ -290,7 +298,9 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
           </ScrollView>
         )}
       </Animated.View>
-    </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -300,10 +310,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.75)',
   },
   panel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
     backgroundColor: '#12121A',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
