@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -54,7 +54,7 @@ export default function TabLayout() {
             isIOS ? (
               <SymbolView name="wineglass" tintColor={color} size={size} />
             ) : (
-              <Feather name="coffee" size={size} color={color} />
+              <MaterialCommunityIcons name="glass-cocktail" size={size} color={color} />
             ),
         }}
       />
