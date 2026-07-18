@@ -1,0 +1,1 @@
+- [Cross-category safety enforcement](cross-category-safety.md) — server-side catalog outranks client and vision model; blocking modal, no bypass; keep server catalog in lockstep with mobile data.

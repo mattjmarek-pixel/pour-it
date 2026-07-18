@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Router } from "express";
 
+import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
+
 const router = Router();
 
 interface ProductHint {
@@ -26,6 +28,8 @@ interface AIRecipe {
 
 type IdentifyResponse =
   | { status: "not_a_drink" }
+  | { status: "uncertain" }
+  | { status: "category_mismatch"; detectedCategory: string; label: string }
   | { status: "matched"; productId: string }
   | {
       status: "ai";
@@ -74,13 +78,21 @@ function isRecipe(v: unknown): v is AIRecipe {
 }
 
 router.post("/identify-bottle", async (req, res) => {
-  const { imageBase64, products } = req.body as {
+  const { imageBase64, products, mode } = req.body as {
     imageBase64?: string;
     products?: ProductHint[];
+    mode?: string;
   };
 
   if (!imageBase64) {
     res.status(400).json({ error: "imageBase64 is required" });
+    return;
+  }
+
+  if (!mode || !VALID_CATEGORIES.has(mode)) {
+    res.status(400).json({
+      error: 'mode is required and must be one of "spirits", "thc", "mocktails"',
+    });
     return;
   }
 
@@ -96,23 +108,33 @@ router.post("/identify-bottle", async (req, res) => {
       .map((p) => `- ${p.id}: ${p.name} by ${p.brand} (${p.category})`)
       .join("\n");
 
-    const prompt = `You are identifying a beverage from a photo for a drink-recipe app.
+    const prompt = `You are identifying a beverage from a photo for a drink-recipe app. Classification comes FIRST and gates everything else.
 
-STEP 1 — SAFETY: Decide whether the item in the image is a safe, human-consumable beverage (alcohol, cannabis-infused drinks, mocktails, sodas, juices, water, etc.). If the item is NOT meant for human consumption — for example household cleaner, bleach, medicine, motor oil, paint, solvents, cosmetics, or any non-beverage object — set "isDrink" to false and stop.
+STAGE 1 — CATEGORY CLASSIFICATION (always do this first):
+Classify the item in the image into exactly one category:
+- "spirits": alcoholic spirits/liquor (vodka, rum, gin, tequila, whiskey, etc.)
+- "thc": cannabis-infused beverages or drinkable cannabis products (THC/CBD seltzers, tonics, syrups, drops)
+- "mocktails": non-alcoholic, non-cannabis drink products (zero-proof spirits, mixers, sodas, juices, sparkling water)
+- "non_beverage": anything NOT meant for safe human drinking — household cleaner, bleach, medicine, motor oil, paint, solvents, cosmetics, food, or any non-drink object
+- "uncertain": you cannot confidently tell what the item is or which category it belongs to
 
-STEP 2 — MATCH: If it is a safe drink, check whether it matches one of these known products:
+Also report "confidence": "high" or "low". If the label is unreadable, the product is ambiguous (e.g. cannot tell if a seltzer contains THC), or you are guessing — use "low" confidence or "uncertain". NEVER guess a category to be helpful.
+
+STAGE 2 — IDENTIFICATION (ONLY if Stage 1 category is "${mode}" with high confidence):
+The app is currently in "${mode}" mode. Only if the item's category is exactly "${mode}" AND confidence is high:
+a) If it matches one of these known products, return its exact productId:
 ${productList || "(none provided)"}
-If it matches, return its exact productId.
+b) Otherwise provide "name", "brand", and exactly 3 drink recipes featuring it.
 
-STEP 3 — GENERATE: If it is a safe drink but does NOT match any known product, generate the product's name, brand, the best-fit category (exactly one of: "spirits", "thc", "mocktails"), and exactly 3 cocktail/drink recipes that feature it.
+If the category is NOT "${mode}", still report the category and, if clearly readable, the product's name (for display in a warning) — but do NOT provide recipes and do NOT provide a productId.
 
 Respond with ONLY valid JSON (no markdown, no commentary) in this exact shape:
 {
-  "isDrink": boolean,
+  "category": "spirits" | "thc" | "mocktails" | "non_beverage" | "uncertain",
+  "confidence": "high" | "low",
   "productId": string | null,
   "name": string | null,
   "brand": string | null,
-  "category": "spirits" | "thc" | "mocktails" | null,
   "recipes": [
     {
       "title": string,
@@ -125,10 +147,11 @@ Respond with ONLY valid JSON (no markdown, no commentary) in this exact shape:
 }
 
 Rules:
-- If "isDrink" is false: set every other field to null and "recipes" to [].
-- If it matches a known product: set "productId" and you may set "recipes" to [].
-- If it is a drink with no match: set "productId" to null and provide "name", "brand", "category", and exactly 3 recipes.
-- If you genuinely cannot identify any beverage in the image: set "isDrink" to true only if you are confident it is a drink; otherwise set "name" to null with "recipes" [].`;
+- "category" and "confidence" must ALWAYS be set.
+- If category is "non_beverage" or "uncertain": productId null, recipes [].
+- If category !== "${mode}": productId null, recipes []. "name" may be set for display only.
+- If category === "${mode}" with high confidence and a known product matches: set productId, recipes may be [].
+- If category === "${mode}" with high confidence and no match: name, brand, and exactly 3 recipes.`;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -155,28 +178,80 @@ Rules:
     const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
 
     let parsed: {
-      isDrink?: boolean;
+      category?: string;
+      confidence?: string;
       productId?: string | null;
       name?: string | null;
       brand?: string | null;
-      category?: string | null;
       recipes?: unknown;
     };
     try {
       parsed = JSON.parse(stripFences(raw));
     } catch {
       req.log.warn({ raw }, "Failed to parse identify-bottle response");
-      const out: IdentifyResponse = { status: "not_found" };
+      const out: IdentifyResponse = { status: "uncertain" };
       res.json(out);
       return;
     }
 
-    if (parsed.isDrink === false) {
+    const category = typeof parsed.category === "string" ? parsed.category : "";
+    const confidence =
+      typeof parsed.confidence === "string" ? parsed.confidence : "low";
+
+    // Hard gate 1: non-consumable items are always blocked.
+    if (category === "non_beverage") {
       const out: IdentifyResponse = { status: "not_a_drink" };
       res.json(out);
       return;
     }
 
+    // Hard gate 2: uncertain or low-confidence classifications never proceed.
+    // Uncertain blocks — it must not default to the active mode.
+    if (
+      category === "uncertain" ||
+      confidence !== "high" ||
+      !VALID_CATEGORIES.has(category)
+    ) {
+      const out: IdentifyResponse = { status: "uncertain" };
+      res.json(out);
+      return;
+    }
+
+    // Hard gate 3: category mismatch — server-side enforcement regardless of
+    // whatever payload the model produced. No identification or recipes leave
+    // the server in this branch.
+    if (category !== mode) {
+      const out: IdentifyResponse = {
+        status: "category_mismatch",
+        detectedCategory: category,
+        label: typeof parsed.name === "string" ? parsed.name : "",
+      };
+      res.json(out);
+      return;
+    }
+
+    // Hard gate 4 (deterministic, does not trust the model's classification):
+    // if the identified name or productId maps to a KNOWN catalog product of
+    // a different mode, block — even if the model claimed the category is
+    // fine. The static catalog outranks the vision model.
+    const knownEntry =
+      (parsed.productId ? lookupCatalogById(parsed.productId) : null) ??
+      (typeof parsed.name === "string" ? lookupCatalogByName(parsed.name) : null);
+    if (knownEntry && knownEntry.mode !== mode) {
+      req.log.warn(
+        { name: parsed.name, productId: parsed.productId, mode, actualMode: knownEntry.mode },
+        "Blocked cross-category identification via catalog cross-check"
+      );
+      const out: IdentifyResponse = {
+        status: "category_mismatch",
+        detectedCategory: knownEntry.mode,
+        label: knownEntry.name,
+      };
+      res.json(out);
+      return;
+    }
+
+    // Category verified === mode with high confidence from here on.
     const candidate = parsed.productId ?? null;
     if (candidate && hints.some((p) => p.id === candidate)) {
       const out: IdentifyResponse = { status: "matched", productId: candidate };
@@ -187,18 +262,14 @@ Rules:
     const recipes = Array.isArray(parsed.recipes)
       ? parsed.recipes.filter(isRecipe)
       : [];
-    const category =
-      parsed.category && VALID_CATEGORIES.has(parsed.category)
-        ? parsed.category
-        : null;
 
-    if (parsed.name && category && recipes.length >= 3) {
+    if (parsed.name && recipes.length >= 3) {
       const out: IdentifyResponse = {
         status: "ai",
         product: {
           name: parsed.name,
           brand: parsed.brand ?? parsed.name,
-          category,
+          category: mode,
           recipes: recipes.slice(0, 3),
         },
       };

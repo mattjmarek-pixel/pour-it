@@ -2208,11 +2208,48 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
   ],
 };
 
-export const BARCODE_MAP: Record<string, string> = {
-  '085592100141': 'svedka',
-  '082000738009': 'captain',
-  '086067000152': 'tanqueray',
-  '085156100178': 'cuervo',
-  '088004012459': 'bulleit',
-  '080432402702': 'bacardi',
-};
+const ALL_MODES: AppMode[] = ['spirits', 'thc', 'mocktails'];
+
+/**
+ * Mode of every catalog product, derived from the PRODUCTS structure itself.
+ * Because it is derived (not hand-maintained), no product can be missing a
+ * mode or carry an inconsistent one.
+ */
+export const PRODUCT_MODES: Record<string, AppMode> = (() => {
+  const map: Record<string, AppMode> = {};
+  for (const m of ALL_MODES) {
+    for (const p of PRODUCTS[m]) {
+      map[p.id] = m;
+    }
+  }
+  return map;
+})();
+
+export function getProductMode(productId: string): AppMode | null {
+  return PRODUCT_MODES[productId] ?? null;
+}
+
+/**
+ * Search ALL modes for a barcode match (leading-zero tolerant).
+ * Returns the product and the mode it belongs to, so callers can detect
+ * cross-category scans instead of silently missing them.
+ */
+export function findProductByBarcode(
+  raw: string
+): { product: Product; mode: AppMode } | null {
+  const candidates = new Set<string>([
+    raw,
+    raw.replace(/^0+/, ''),
+    raw.padStart(13, '0'),
+    raw.padStart(12, '0'),
+  ]);
+  for (const m of ALL_MODES) {
+    for (const p of PRODUCTS[m]) {
+      const hit = (p.barcodes ?? []).some(
+        (code) => candidates.has(code) || candidates.has(code.replace(/^0+/, ''))
+      );
+      if (hit) return { product: p, mode: m };
+    }
+  }
+  return null;
+}

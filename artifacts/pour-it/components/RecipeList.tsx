@@ -219,6 +219,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            productId: product.id,
             productName: product.name,
             spiritType: product.spiritType,
             flavorNotes: product.flavorNotes,

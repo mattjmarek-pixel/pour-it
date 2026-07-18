@@ -15,10 +15,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRouter } from 'expo-router';
+
+import { CrossCategoryWarningModal } from '@/components/CrossCategoryWarningModal';
 import { EmptyState } from '@/components/EmptyState';
 import { ScanToast } from '@/components/ScanToast';
+import { useMode } from '@/context/ModeContext';
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
-import { PRODUCTS } from '@/src/data/recipes';
+import { PRODUCTS, findProductByBarcode } from '@/src/data/recipes';
 import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
@@ -44,12 +48,27 @@ interface IdentifyAIRecipe {
 
 type IdentifyResponse =
   | { status: 'not_a_drink' }
+  | { status: 'uncertain' }
+  | { status: 'category_mismatch'; detectedCategory: string; label: string }
   | { status: 'matched'; productId: string }
   | {
       status: 'ai';
       product: { name: string; brand: string; category: string; recipes: IdentifyAIRecipe[] };
     }
   | { status: 'not_found' };
+
+const APP_MODES: AppMode[] = ['spirits', 'thc', 'mocktails'];
+
+function isAppMode(value: string): value is AppMode {
+  return (APP_MODES as string[]).includes(value);
+}
+
+interface CategoryMismatch {
+  detectedCategory: AppMode;
+  productName?: string;
+  /** Present only for deterministic barcode matches from the local catalog. */
+  product?: Product;
+}
 
 function slugify(value: string): string {
   return value
@@ -76,6 +95,9 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('Product not found — try browsing manually');
   const [identifying, setIdentifying] = useState(false);
+  const [mismatch, setMismatch] = useState<CategoryMismatch | null>(null);
+  const { setMode, setPendingProduct } = useMode();
+  const router = useRouter();
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
@@ -126,25 +148,28 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       return;
     }
 
-    const candidates = new Set<string>([
-      raw,
-      raw.replace(/^0+/, ''),
-      raw.padStart(13, '0'),
-      raw.padStart(12, '0'),
-    ]);
+    // Search the ENTIRE catalog (all modes), not just the active mode, so a
+    // cross-category scan is detected instead of silently falling through.
+    const found = findProductByBarcode(raw);
 
-    const allProducts = PRODUCTS[mode];
-    const match = allProducts.find((p) =>
-      (p.barcodes ?? []).some((code) => candidates.has(code) || candidates.has(code.replace(/^0+/, '')))
-    );
-
-    if (match) {
-      safeNotification(Haptics.NotificationFeedbackType.Success);
-      onProductFound(match);
+    if (found) {
+      if (found.mode === mode) {
+        safeNotification(Haptics.NotificationFeedbackType.Success);
+        onProductFound(found.product);
+        return;
+      }
+      // SAFETY: product belongs to a different category. Do NOT render the
+      // product or its recipes — show the blocking warning modal instead.
+      safeNotification(Haptics.NotificationFeedbackType.Warning);
+      setMismatch({
+        detectedCategory: found.mode,
+        productName: found.product.name,
+        product: found.product,
+      });
       return;
     }
 
-    // No barcode match — fall back to AI vision identification.
+    // No barcode match anywhere — fall back to AI vision identification.
     void identifyWithVision();
   };
 
@@ -184,7 +209,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       const res = await fetch(`https://${domain}/api/identify-bottle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: photo.base64, products: hints }),
+        body: JSON.stringify({ imageBase64: photo.base64, products: hints, mode }),
       });
       if (!res.ok) {
         showToast('Product not found — try browsing manually', 2400);
@@ -195,6 +220,24 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
 
       if (data.status === 'not_a_drink') {
         showToast("This doesn't look like a drink — please scan a beverage", 2800);
+        return;
+      }
+
+      if (data.status === 'uncertain') {
+        showToast("Couldn't confirm what this is — try scanning again or check the label", 2800);
+        return;
+      }
+
+      if (data.status === 'category_mismatch') {
+        if (isAppMode(data.detectedCategory) && data.detectedCategory !== mode) {
+          safeNotification(Haptics.NotificationFeedbackType.Warning);
+          setMismatch({
+            detectedCategory: data.detectedCategory,
+            productName: data.label || undefined,
+          });
+        } else {
+          showToast("Couldn't confirm what this is — try scanning again or check the label", 2800);
+        }
         return;
       }
 
@@ -261,6 +304,27 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       setScanned(false);
       setToastVisible(false);
     }, ms);
+  };
+
+  const handleMismatchSwitchMode = () => {
+    if (!mismatch) return;
+    const target = mismatch.detectedCategory;
+    // For deterministic barcode matches we hand the product over so the
+    // destination mode opens straight to its (correct-category) recipes.
+    // For AI-vision mismatches there is no identification payload by design —
+    // the user lands on the scanner in the right mode and scans again.
+    if (mismatch.product) {
+      setPendingProduct({ product: mismatch.product, mode: target });
+    }
+    setMismatch(null);
+    setMode(target);
+    router.replace(`/(tabs)/${target}`);
+    resetAfter(0);
+  };
+
+  const handleMismatchCancel = () => {
+    setMismatch(null);
+    resetAfter(0);
   };
 
   // Web fallback: CameraView's barcode scanning is unreliable in the iframe
@@ -421,6 +485,18 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
           <Text style={styles.browseLink}>Browse manually</Text>
         </Pressable>
       </View>
+
+      {/* Blocking cross-category safety modal — no bypass path */}
+      {mismatch && (
+        <CrossCategoryWarningModal
+          visible
+          detectedCategory={mismatch.detectedCategory}
+          currentMode={mode}
+          productName={mismatch.productName}
+          onSwitchMode={handleMismatchSwitchMode}
+          onCancel={handleMismatchCancel}
+        />
+      )}
     </View>
   );
 }

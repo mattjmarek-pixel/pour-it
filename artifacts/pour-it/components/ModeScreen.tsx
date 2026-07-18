@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
@@ -7,6 +7,7 @@ import { ScanView } from '@/components/ScanView';
 import { ProductGrid } from '@/components/ProductGrid';
 import { RecipeList } from '@/components/RecipeList';
 import { AIPanel } from '@/components/AIPanel';
+import { useMode } from '@/context/ModeContext';
 
 type ViewState = 'scan' | 'products' | 'recipes';
 
@@ -20,8 +21,21 @@ export function ModeScreen({ mode }: ModeScreenProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [aiVisible, setAiVisible] = useState(false);
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
+  const { pendingProduct, setPendingProduct } = useMode();
 
   const accentColor = MODE_COLORS[mode];
+
+  // When the user confirms "Switch to X mode" in the cross-category warning,
+  // the matched product is handed over via context. Safety: only consume it
+  // if it actually belongs to THIS mode.
+  useEffect(() => {
+    if (pendingProduct && pendingProduct.mode === mode) {
+      setSelectedProduct(pendingProduct.product);
+      setSelectedCategory(null);
+      setView('recipes');
+      setPendingProduct(null);
+    }
+  }, [pendingProduct, mode, setPendingProduct]);
 
   const handleProductFound = (product: Product) => {
     setSelectedProduct(product);

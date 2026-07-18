@@ -1,9 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Router } from "express";
 
+import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
+
 const router = Router();
 
 interface GenerateRequestBody {
+  productId?: string;
   productName?: string;
   spiritType?: string;
   flavorNotes?: string[];
@@ -34,6 +37,7 @@ router.options("/generate", (_req, res) => {
 
 router.post("/generate", async (req, res) => {
   const {
+    productId,
     productName,
     spiritType,
     flavorNotes = [],
@@ -44,6 +48,27 @@ router.post("/generate", async (req, res) => {
   if (!productName || !spiritType || !category) {
     res.status(400).json({
       error: "productName, spiritType, and category are required",
+    });
+    return;
+  }
+
+  // SERVER-SIDE CATEGORY ENFORCEMENT — does not trust the client.
+  // If this product is in the known catalog (by id or exact name), its
+  // catalog mode must match the requested category, or we refuse to
+  // generate. A THC product can never receive a spirits recipe here even
+  // if the client is buggy or bypassed.
+  const catalogEntry =
+    (productId ? lookupCatalogById(productId) : null) ??
+    lookupCatalogByName(productName);
+  if (catalogEntry && catalogEntry.mode !== category) {
+    req.log.warn(
+      { productId, productName, requestedCategory: category, actualMode: catalogEntry.mode },
+      "Blocked cross-category recipe generation"
+    );
+    res.status(409).json({
+      error: "category_mismatch",
+      detectedCategory: catalogEntry.mode,
+      message: `${catalogEntry.name} is a ${catalogEntry.mode} product; refusing to generate ${category} recipes for it.`,
     });
     return;
   }
