@@ -1,0 +1,43 @@
+# Replit Agent Prompt: Close Category-Verification Gap for Non-Catalog Products
+
+Copy-paste everything below into Replit Agent.
+
+---
+
+I have a gap in my category safety check. In `artifacts/api-server/src/routes/recipes.ts`, the `/generate` endpoint only verifies category against the static catalog:
+
+```js
+if (catalogEntry && catalogEntry.mode !== category) { ... }
+```
+
+This means if `catalogEntry` is null (the product isn't one of the fixed catalog items — i.e. it was identified via AI vision scanning, not barcode/catalog lookup), the category check is skipped entirely and the endpoint trusts whatever `category` value the client sends. I need this closed so non-catalog products get the same server-side enforcement catalog products already have.
+
+## Fix: short-lived signed verification token
+
+**1. In `artifacts/api-server/src/routes/identify.ts`:**
+- When the response status is `"ai"` (i.e. an unlisted product was identified and confirmed to match the requested mode with high confidence), generate a signed token that encodes: the product name (normalized/lowercased), the verified category, and an expiry timestamp (5 minutes from now).
+- Use HMAC-SHA256 with a server-side secret (read from an environment variable, e.g. `CATEGORY_TOKEN_SECRET` — add this to the env if it doesn't exist, generate a random value for it).
+- Token format: base64url of `{productName, category, exp}` plus the HMAC signature, e.g. `base64url(payload).base64url(signature)`.
+- Include this token in the `"ai"` response as a new field, e.g. `verificationToken`.
+
+**2. In `artifacts/api-server/src/routes/recipes.ts`:**
+- Accept an optional `verificationToken` field in the `/generate` request body.
+- New logic:
+  - If `catalogEntry` exists → use the existing catalog check (unchanged, this already works).
+  - Else if `catalogEntry` is null (non-catalog product) → require `verificationToken`. Verify its HMAC signature, check it hasn't expired, and check that the token's `productName` matches the request's `productName` (normalized comparison) and that the token's `category` matches the request's `category`. If any of this fails (missing token, bad signature, expired, mismatched name/category) → return the same 409 `category_mismatch` style rejection used for catalog mismatches, with an appropriate message (e.g. "Unable to verify product category — please re-scan.").
+  - Only proceed to AI recipe generation if either the catalog check passes OR the token check passes.
+
+**3. Client-side wiring:**
+- Find wherever the client calls `/identify-bottle` and then subsequently calls `/generate` for an `"ai"` status result (likely in `ScanView.tsx` or similar).
+- Store the `verificationToken` from the identify response and include it in the `/generate` request body when generating recipes for that product.
+- If the user re-scans or the token would be expired (e.g. they sat on a screen for 10+ minutes), the generate call should fail gracefully with a message like "Please re-scan to continue" rather than a confusing generic error — surface this clearly, not as a silent failure.
+
+## Verification — show me all of this
+
+1. The updated `identify.ts` showing token generation in the `"ai"` branch.
+2. The updated `recipes.ts` showing the full new verification logic (catalog check + token check).
+3. The client code showing the token being captured and passed through.
+4. Confirm via `grep` that `CATEGORY_TOKEN_SECRET` (or whatever you named it) is read from an environment variable, not hardcoded.
+5. **Manual test**: identify a non-catalog product via AI vision in the correct mode, confirm recipe generation succeeds normally. Then try calling `/generate` directly with a mismatched `category` and no valid token for a non-catalog product name, and confirm it's rejected with a 409. Describe exactly what you tested and the result.
+
+Do not consider this complete until step 5 is actually performed and confirmed.

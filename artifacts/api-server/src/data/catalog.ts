@@ -53,7 +53,7 @@ export const CATALOG: Record<string, CatalogEntry> = {
  * Aggressive normalization so spacing/punctuation/diacritic tweaks
  * ("Wynk-Seltzer!", "wynk  seltzer") cannot evade the safety check.
  */
-function normalizeName(value: string): string {
+export function normalizeName(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

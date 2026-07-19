@@ -194,11 +194,13 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setAiRecipe(null);
     setAiLoading(false);
+    setAiError(null);
 
     const hasStaticAI = product.recipes.some((r) => r.tier === 'ai');
     if (hasStaticAI) return;
@@ -225,9 +227,23 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             flavorNotes: product.flavorNotes,
             category: mode,
             existingRecipeTitles: product.recipes.map((r) => r.title),
+            verificationToken: product.verificationToken,
           }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (res.status === 409) {
+            try {
+              const err = (await res.json()) as { error?: string };
+              if (cancelled) return;
+              if (err.error === 'token_expired' || err.error === 'category_mismatch') {
+                setAiError('Please re-scan to continue — verification expired or unavailable.');
+              }
+            } catch {
+              // fall through to silent failure
+            }
+          }
+          return;
+        }
         const data = (await res.json()) as {
           title?: string;
           description?: string;
@@ -327,6 +343,11 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             />
           ))}
 
+          {aiError && (
+            <View style={styles.aiLoadingWrap}>
+              <Text style={styles.aiErrorText}>{aiError}</Text>
+            </View>
+          )}
           {aiLoading && (
             <View style={styles.aiLoadingWrap}>
               <SkeletonCard />
@@ -545,6 +566,12 @@ const styles = StyleSheet.create({
   aiLoadingWrap: {
     gap: 8,
     alignItems: 'center',
+  },
+  aiErrorText: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 13,
+    color: '#F59E0B',
+    textAlign: 'center',
   },
   aiLoadingText: {
     fontFamily: 'DMSans_400Regular',

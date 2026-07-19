@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Router } from "express";
 
 import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
+import { verifyCategoryToken } from "../utils/categoryToken";
 
 const router = Router();
 
@@ -12,6 +13,7 @@ interface GenerateRequestBody {
   flavorNotes?: string[];
   category?: "spirits" | "thc" | "mocktails";
   existingRecipeTitles?: string[];
+  verificationToken?: string;
 }
 
 interface GeneratedIngredient {
@@ -43,6 +45,7 @@ router.post("/generate", async (req, res) => {
     flavorNotes = [],
     category,
     existingRecipeTitles = [],
+    verificationToken,
   } = (req.body ?? {}) as GenerateRequestBody;
 
   if (!productName || !spiritType || !category) {
@@ -60,17 +63,46 @@ router.post("/generate", async (req, res) => {
   const catalogEntry =
     (productId ? lookupCatalogById(productId) : null) ??
     lookupCatalogByName(productName);
-  if (catalogEntry && catalogEntry.mode !== category) {
-    req.log.warn(
-      { productId, productName, requestedCategory: category, actualMode: catalogEntry.mode },
-      "Blocked cross-category recipe generation"
-    );
-    res.status(409).json({
-      error: "category_mismatch",
-      detectedCategory: catalogEntry.mode,
-      message: `${catalogEntry.name} is a ${catalogEntry.mode} product; refusing to generate ${category} recipes for it.`,
-    });
-    return;
+  if (catalogEntry) {
+    if (catalogEntry.mode !== category) {
+      req.log.warn(
+        { productId, productName, requestedCategory: category, actualMode: catalogEntry.mode },
+        "Blocked cross-category recipe generation"
+      );
+      res.status(409).json({
+        error: "category_mismatch",
+        detectedCategory: catalogEntry.mode,
+        message: `${catalogEntry.name} is a ${catalogEntry.mode} product; refusing to generate ${category} recipes for it.`,
+      });
+      return;
+    }
+  } else {
+    // Non-catalog product (identified via AI vision): the category cannot be
+    // checked against the static catalog, so we require a server-issued
+    // verification token proving /identify-bottle verified this exact
+    // name+category pairing recently. Without it, the client's `category`
+    // claim is untrusted and generation is refused.
+    const verification = verificationToken
+      ? verifyCategoryToken(verificationToken, productName, category)
+      : ({ ok: false, reason: "invalid" } as const);
+    if (!verification.ok) {
+      req.log.warn(
+        { productName, requestedCategory: category, reason: verification.reason },
+        "Blocked unverified non-catalog recipe generation"
+      );
+      if (verification.reason === "expired") {
+        res.status(409).json({
+          error: "token_expired",
+          message: "Verification expired — please re-scan the product to continue.",
+        });
+      } else {
+        res.status(409).json({
+          error: "category_mismatch",
+          message: `Cannot verify that "${productName}" is a ${category} product; refusing to generate recipes. Please re-scan the product.`,
+        });
+      }
+      return;
+    }
   }
 
   const systemPrompt = `You are an expert mixologist and drinks consultant. Generate one creative cocktail recipe.

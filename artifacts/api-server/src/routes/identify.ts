@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Router } from "express";
 
 import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
+import { signCategoryToken } from "../utils/categoryToken";
 
 const router = Router();
 
@@ -39,6 +40,7 @@ type IdentifyResponse =
         category: string;
         recipes: AIRecipe[];
       };
+      verificationToken: string;
     }
   | { status: "not_found" };
 
@@ -264,6 +266,9 @@ Rules:
       : [];
 
     if (parsed.name && recipes.length >= 3) {
+      // Non-catalog product verified as matching the requested mode: issue a
+      // short-lived signed token so /recipes/generate can later prove this
+      // name+category pairing was server-verified (not client-asserted).
       const out: IdentifyResponse = {
         status: "ai",
         product: {
@@ -272,6 +277,7 @@ Rules:
           category: mode,
           recipes: recipes.slice(0, 3),
         },
+        verificationToken: signCategoryToken(parsed.name, mode),
       };
       res.json(out);
       return;

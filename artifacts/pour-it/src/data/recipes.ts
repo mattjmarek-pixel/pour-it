@@ -27,6 +27,8 @@ export interface Product {
   flavorNotes: string[];
   barcodes?: string[];
   aiGenerated?: boolean;
+  /** Server-issued signed token proving name+category was verified during AI identification (non-catalog products only). */
+  verificationToken?: string;
   recipes: Recipe[];
 }
 

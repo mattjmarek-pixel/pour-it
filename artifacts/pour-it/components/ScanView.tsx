@@ -54,6 +54,7 @@ type IdentifyResponse =
   | {
       status: 'ai';
       product: { name: string; brand: string; category: string; recipes: IdentifyAIRecipe[] };
+      verificationToken: string;
     }
   | { status: 'not_found' };
 
@@ -253,7 +254,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       }
 
       if (data.status === 'ai' && data.product.recipes.length > 0) {
-        const aiProduct = buildAIProduct(data.product);
+        const aiProduct = buildAIProduct(data.product, data.verificationToken);
         safeNotification(Haptics.NotificationFeedbackType.Success);
         onProductFound(aiProduct);
         return;
@@ -267,12 +268,15 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
     }
   };
 
-  const buildAIProduct = (aiProduct: {
-    name: string;
-    brand: string;
-    category: string;
-    recipes: IdentifyAIRecipe[];
-  }): Product => {
+  const buildAIProduct = (
+    aiProduct: {
+      name: string;
+      brand: string;
+      category: string;
+      recipes: IdentifyAIRecipe[];
+    },
+    verificationToken?: string
+  ): Product => {
     const baseSlug = slugify(aiProduct.name) || 'ai-product';
     const recipes: Recipe[] = aiProduct.recipes.slice(0, 3).map((r, i) => ({
       id: `ai-${baseSlug}-${i}`,
@@ -293,6 +297,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       spiritType: aiProduct.brand || aiProduct.category,
       flavorNotes: [],
       aiGenerated: true,
+      verificationToken,
       recipes,
     };
   };
