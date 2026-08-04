@@ -337,8 +337,13 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   // camera. The reticle still renders so the design intent is visible.
   if (Platform.OS === 'web') {
     return (
-      <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
-        <View style={styles.topBar}>
+      <View
+        style={[
+          styles.root,
+          { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) + 16 },
+        ]}
+      >
+        <View style={styles.topBarInline}>
           <Text style={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
         </View>
         <View style={styles.webNoticeWrap}>
@@ -591,6 +596,13 @@ const styles = StyleSheet.create({
     borderLeftWidth: 0,
     borderTopWidth: 0,
     borderBottomRightRadius: 12,
+  },
+  topBarInline: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   topBar: {
     position: 'absolute',
