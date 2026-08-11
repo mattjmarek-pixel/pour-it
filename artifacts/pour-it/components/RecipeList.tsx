@@ -213,6 +213,14 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         return;
       }
 
+      // Fail closed: AI-identified (non-catalog) products must carry the
+      // server-signed verification token. Without it, don't even send the
+      // request — the server would reject it anyway (409).
+      if (product.aiGenerated && !product.verificationToken) {
+        setAiError('Please re-scan to continue — verification expired or unavailable.');
+        return;
+      }
+
       setAiLoading(true);
       try {
         const domain = process.env.EXPO_PUBLIC_DOMAIN;

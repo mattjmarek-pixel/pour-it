@@ -1,0 +1,40 @@
+I need you to fix two issues in this Expo/React Native app (pour-it). Please do them in order, and confirm each one before moving to the next.
+
+---
+
+ISSUE 1: Verify and fix category token passthrough in RecipeList.tsx
+
+Context: We have a signed HMAC-SHA256 category token system (in categoryToken.ts) that's supposed to prevent AI-identified, non-catalog products from bypassing cross-category safety checks when generating recipes. The server-side enforcement lives in recipes.ts and checks for this token. But we've never confirmed that the actual call site — RecipeList.tsx — passes the signed token when it calls /api/recipes/generate.
+
+What I need you to do:
+
+1. Open RecipeList.tsx and find every place it calls /api/recipes/generate (or whatever function wraps that API call).
+2. Check: does that call include the signed category token in the request? Show me the exact code for each call site.
+3. Trace back: where does the token in that call site come from? Is it the actual signed token produced by categoryToken.ts, or is it missing, hardcoded, or using an unsigned/raw category value instead?
+4. If the token is missing or not being passed correctly, fix it so:
+   - The signed token is generated/retrieved correctly for the identified category
+   - It's included in every request to /api/recipes/generate, including for AI-identified non-catalog products (not just catalog products)
+   - If no valid signed token is available for some reason, the request should NOT go through — fail closed, don't fail open
+5. After fixing, run grep -rn "recipes/generate" artifacts/pour-it/ and grep -rn "categoryToken" artifacts/pour-it/RecipeList.tsx (adjust path if needed) and show me the output so I can verify the fix is in place.
+6. Run typecheck to confirm nothing broke.
+
+Do not touch categoryToken.ts, identify.ts, recipes.ts, or CrossCategoryWarningModal.tsx — those are already correct. This is only about the call site in RecipeList.tsx.
+
+---
+
+ISSUE 2: Fix tab title text clipping under status bar/notch
+
+Context: The tab titles ("Spirits," "THC," "Mocktails") are being clipped by the device status bar/notch on all three tabs. This is happening because the shared header component isn't accounting for safe area insets.
+
+What I need you to do:
+
+1. Find the shared header component used across the Spirits, THC, and Mocktails tabs.
+2. Import useSafeAreaInsets from react-native-safe-area-context in that component (it's already a dependency, no install needed).
+3. Inside the component, call const insets = useSafeAreaInsets();
+4. Apply paddingTop: insets.top to the outer container/wrapper style of the header — not to the text itself, to the container so the whole header shifts down below the notch/status bar.
+5. Show me the diff of what changed.
+6. Confirm this applies to all three tabs (Spirits, THC, Mocktails) since they share this header component — don't fix it in three separate places if it's meant to be shared.
+
+---
+
+After both fixes, run the project's typecheck/lint command and paste the output so I can confirm everything is clean.
