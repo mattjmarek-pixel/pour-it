@@ -1,0 +1,19 @@
+I need you to make the THC legal-states list easy and safe to keep current, since cannabis laws change throughout the year and this list has real legal/compliance weight. Right now there are two copies of this list — legalStatesForTHC.ts (mobile) and thcLegalStates.ts (server) — that need to stay in sync.
+
+What I need you to do:
+
+1. Check whether legalStatesForTHC.ts (mobile) and thcLegalStates.ts (server) are already sharing a single source of truth, or if they're two separately-maintained files with duplicated data. If they're duplicated, refactor so there is exactly ONE canonical list (in a shared package both mobile and server import from, if the monorepo structure supports that — check the lib/ shared packages folder). Two independently-edited copies of a legal-compliance list is a real risk: they will eventually drift out of sync.
+
+2. Add a clear, prominent comment block at the top of the canonical list file stating:
+   - This list has legal/compliance implications and must be kept accurate
+   - The date it was last verified against a primary source
+   - Where to check for updates (e.g. each state's official cannabis regulatory agency site, or a maintained legal database)
+   - A reminder that recreational-legal status can change via legislation or ballot measure, and states close to flipping should be monitored (e.g. note if Pennsylvania or any other state was close to legalizing at the time of last update)
+
+3. Add a lightweight test (or a documented manual check, whichever fits the existing test conventions better) that at minimum confirms the mobile and server lists are identical to each other — so if someone edits one without the other, something catches it before it ships.
+
+4. Do NOT change which states are currently on the list — I will provide the verified, up-to-date list separately after checking it against a primary source. This task is only about the structure (single source of truth, staying in sync, documentation) not the current data.
+
+5. Show me the diff and the new file structure.
+
+6. Run typecheck and the full test suite, paste the output.

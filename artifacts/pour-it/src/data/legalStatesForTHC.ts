@@ -1,7 +1,13 @@
+import { THC_RECREATIONAL_LEGAL_ABBRS } from '@workspace/thc-legal-states';
+
 /**
- * US jurisdictions where recreational cannabis is legal.
+ * US jurisdictions where recreational cannabis is legal (client-side UX gate;
+ * the server enforces independently from the same canonical list).
  *
- * Last reviewed: August 2026. State laws change — update this list as needed.
+ * The DATA lives in the shared `@workspace/thc-legal-states` package — edit
+ * the list THERE, never here. See that file's compliance header for the
+ * last-verified date and where to check for updates.
+ *
  * Structured so medical-only states can be added later without touching the
  * gating logic (see `THC_LEGAL_STATUS`).
  */
@@ -9,38 +15,15 @@
 export type ThcLegality = 'recreational' | 'medical' | 'illegal';
 
 /**
- * Two-letter USPS abbreviations → legality.
+ * Two-letter USPS abbreviations → legality, derived from the canonical list.
  * Only 'recreational' entries unlock the THC tab today; the map exists so a
  * future policy change (e.g. allowing medical states) is a one-line edit in
  * `isThcLegalIn` rather than a data migration.
  */
-export const THC_LEGAL_STATUS: Record<string, ThcLegality> = {
-  AK: 'recreational',
-  AZ: 'recreational',
-  CA: 'recreational',
-  CO: 'recreational',
-  CT: 'recreational',
-  DC: 'recreational',
-  DE: 'recreational',
-  IL: 'recreational',
-  MA: 'recreational',
-  MD: 'recreational',
-  ME: 'recreational',
-  MI: 'recreational',
-  MN: 'recreational',
-  MO: 'recreational',
-  MT: 'recreational',
-  NJ: 'recreational',
-  NM: 'recreational',
-  NV: 'recreational',
-  NY: 'recreational',
-  OH: 'recreational',
-  OR: 'recreational',
-  RI: 'recreational',
-  VA: 'recreational',
-  VT: 'recreational',
-  WA: 'recreational',
-};
+export const THC_LEGAL_STATUS: Record<string, ThcLegality> =
+  Object.fromEntries(
+    THC_RECREATIONAL_LEGAL_ABBRS.map((abbr) => [abbr, 'recreational'] as const)
+  );
 
 /** True when THC features may be enabled for the given state abbreviation. */
 export function isThcLegalIn(stateAbbr: string | null | undefined): boolean {

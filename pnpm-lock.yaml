@@ -172,6 +172,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/thc-legal-states':
+        specifier: workspace:*
+        version: link:../../lib/thc-legal-states
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -431,6 +434,9 @@ importers:
       '@react-navigation/native-stack':
         specifier: ^7.16.0
         version: 7.16.0(@react-navigation/native@7.2.5(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@workspace/thc-legal-states':
+        specifier: workspace:*
+        version: link:../../lib/thc-legal-states
       expo-camera:
         specifier: ^17.0.10
         version: 17.0.10(expo@54.0.34)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -643,6 +649,8 @@ importers:
       p-retry:
         specifier: ^7.1.1
         version: 7.1.1
+
+  lib/thc-legal-states: {}
 
   scripts:
     devDependencies:
