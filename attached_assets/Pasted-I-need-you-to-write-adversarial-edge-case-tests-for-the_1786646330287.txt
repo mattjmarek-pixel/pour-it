@@ -1,0 +1,33 @@
+I need you to write adversarial/edge-case tests for the THC location gate system — both the client-side gate (ThcGateContext.tsx, ThcGate.tsx) and the server-side enforcement (locationToken.ts, the verify-thc-location route, and the enforcement blocks in recipes.ts and identify.ts). The goal is to catch it if this system ever silently breaks in a future code change.
+
+What I need you to do:
+
+1. Server-side tests for locationToken.ts and the verify-thc-location route:
+   - A request with no location token is rejected (403)
+   - A request with a malformed/garbage token is rejected
+   - A request with a token that has a valid signature but has expired (past the 45-min TTL) is rejected
+   - A request with a token signed for a non-legal state is rejected (this shouldn't be possible per signLocationToken's guard, but test that the guard actually throws/prevents it)
+   - A category token cannot be used in place of a location token, and vice versa — confirm the "thc-location" purpose marker actually prevents cross-use between the two token types
+   - A request with a tampered token (valid structure, but signature doesn't match payload) is rejected
+   - A request with a genuinely valid, unexpired token for a legal state succeeds (passes the geo check — it's fine if it then hits the existing category-token rule)
+   - Calling verify-thc-location with a non-legal state returns legal: false and does NOT issue a token
+   - Calling verify-thc-location with a legal state returns legal: true and a token
+   - Calling verify-thc-location with a missing or invalid state parameter returns a 400
+
+2. Client-side tests for ThcGateContext.tsx / ThcGate.tsx:
+   - GPS permission denied → gate shows unverified/blocked state, falls back to manual state picker
+   - Reverse geocoding fails or returns no result → treated as unverified, not assumed legal
+   - Manual state picker selection of a non-legal state → blocked, correct message shown
+   - Manual state picker selection of a legal state → proceeds to request token from server
+   - Server responds that the client-reported state is NOT legal (server list disagrees with client) → gate blocks, server wins
+   - Network failure when requesting the location token → fails closed to unverified, not open
+   - Verification check re-runs after the TTL window has passed on a fresh tab focus (confirm the periodic re-check logic still works after these changes)
+   - Confirm no code path allows the THC scan/AI-identify UI to become interactive without a valid token in hand
+
+3. Add these as proper test files following the existing test suite's conventions and location (wherever the current 31 tests live — match that structure/framework).
+
+4. Run the full test suite after adding these and paste the output — I want to see the new test count, and confirm all existing tests still pass alongside the new ones.
+
+5. If any of these tests reveal an actual bug (not just a missing test, but something that's actually broken), stop and tell me what you found before fixing it — I want to know about it, not just have it silently patched.
+
+Do not modify the actual gate/enforcement logic itself unless a test reveals a real bug — this task is about test coverage, not changing behavior.
