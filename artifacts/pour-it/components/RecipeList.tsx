@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { useSavedRecipes } from '@/context/SavedRecipesContext';
+import { useThcGate } from '@/context/ThcGateContext';
 import type { AppMode, Recipe, RecipeTier, Product } from '@/src/data/recipes';
 import { getCachedAIRecipe, setCachedAIRecipe } from '@/src/services/recipeCache';
 import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
@@ -195,6 +196,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const { locationToken } = useThcGate();
 
   useEffect(() => {
     let cancelled = false;
@@ -221,6 +223,13 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         return;
       }
 
+      // Fail closed: THC recipe generation requires the server-signed
+      // location token. Without it, the server rejects with 403 anyway.
+      if (mode === 'thc' && !locationToken) {
+        setAiError('Location verification required — please re-verify your state.');
+        return;
+      }
+
       setAiLoading(true);
       try {
         const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -236,6 +245,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             category: mode,
             existingRecipeTitles: product.recipes.map((r) => r.title),
             verificationToken: product.verificationToken,
+            ...(mode === 'thc' ? { locationToken } : {}),
           }),
         });
         if (!res.ok) {
@@ -290,7 +300,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     return () => {
       cancelled = true;
     };
-  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes]);
+  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes, locationToken]);
 
   const combined: Recipe[] = aiRecipe ? [...product.recipes, aiRecipe] : product.recipes;
   const sortedRecipes = [...combined].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);

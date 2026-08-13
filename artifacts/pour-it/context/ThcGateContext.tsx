@@ -39,6 +39,13 @@ interface ThcGateState {
   status: ThcGateStatus;
   /** USPS abbreviation of the verified or self-reported state, if known. */
   stateAbbr: string | null;
+  /**
+   * Server-signed location verification token. Present only when status is
+   * 'allowed' — the API server cross-checked the state against its own legal
+   * list and signed it. All THC API requests must carry this token; the
+   * server rejects THC requests without it (fail closed).
+   */
+  locationToken: string | null;
   /** True when the current result came from user self-report, not GPS. */
   selfReported: boolean;
   /** Run (or re-run) the GPS verification. No-op if one is already running. */
@@ -46,7 +53,7 @@ interface ThcGateState {
   /** Re-verify if the last successful check is stale (per-session TTL). */
   ensureFresh: () => void;
   /** Manual fallback: user self-reports their state. */
-  submitManualState: (abbr: string) => void;
+  submitManualState: (abbr: string) => Promise<void>;
 }
 
 const ThcGateContext = createContext<ThcGateState | null>(null);
@@ -55,8 +62,53 @@ export function ThcGateProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<ThcGateStatus>('idle');
   const [stateAbbr, setStateAbbr] = useState<string | null>(null);
   const [selfReported, setSelfReported] = useState(false);
+  const [locationToken, setLocationToken] = useState<string | null>(null);
   const inFlight = useRef(false);
   const lastCheckedAt = useRef<number>(0);
+
+  /**
+   * Exchange a locally-verified state for a server-signed location token.
+   * The server independently cross-checks legality — if it disagrees with the
+   * bundled client list (e.g. a law changed), the server wins. Network or
+   * server failure fails closed to 'unverified'.
+   */
+  const finishVerification = useCallback(async (abbr: string, manual: boolean) => {
+    setStateAbbr(abbr);
+    setSelfReported(manual);
+    setLocationToken(null);
+    // Client-side pre-check for instant UX on clearly-illegal states; the
+    // server remains the enforcement boundary either way.
+    if (!isThcLegalIn(abbr)) {
+      setStatus('blocked');
+      return;
+    }
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    if (!domain) {
+      setStatus('unverified');
+      return;
+    }
+    try {
+      const res = await fetch(`https://${domain}/api/verify-thc-location`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: abbr }),
+      });
+      if (!res.ok) {
+        setStatus('unverified');
+        return;
+      }
+      const data = (await res.json()) as { legal?: boolean; locationToken?: string };
+      if (data.legal && typeof data.locationToken === 'string') {
+        setLocationToken(data.locationToken);
+        setStatus('allowed');
+      } else {
+        // Server says not legal — server list outranks the bundled one.
+        setStatus('blocked');
+      }
+    } catch {
+      setStatus('unverified'); // fail closed on network failure
+    }
+  }, []);
 
   const verifyLocation = useCallback(async () => {
     if (inFlight.current) return;
@@ -93,16 +145,14 @@ export function ThcGateProvider({ children }: { children: React.ReactNode }) {
         setStatus('unverified');
         return;
       }
-      setStateAbbr(abbr);
-      setSelfReported(false);
-      setStatus(isThcLegalIn(abbr) ? 'allowed' : 'blocked');
+      await finishVerification(abbr, false);
     } catch {
       // GPS or geocoding failure — never assume legal.
       setStatus('unverified');
     } finally {
       inFlight.current = false;
     }
-  }, []);
+  }, [finishVerification]);
 
   // Refs so ensureFresh stays referentially stable across status changes —
   // ThcGate's focus effect depends on it, and an unstable callback would
@@ -121,18 +171,35 @@ export function ThcGateProvider({ children }: { children: React.ReactNode }) {
     }
   }, [verifyLocation]);
 
-  const submitManualState = useCallback((abbr: string) => {
-    const normalized = normalizeRegionToAbbr(abbr);
-    setStateAbbr(normalized);
-    setSelfReported(true);
-    lastCheckedAt.current = Date.now();
-    // Same legality check as the GPS path — an illegal or unknown selection blocks.
-    setStatus(isThcLegalIn(normalized) ? 'allowed' : 'blocked');
-  }, []);
+  const submitManualState = useCallback(
+    async (abbr: string) => {
+      const normalized = normalizeRegionToAbbr(abbr);
+      lastCheckedAt.current = Date.now();
+      if (!normalized) {
+        setStateAbbr(null);
+        setSelfReported(true);
+        setLocationToken(null);
+        setStatus('blocked');
+        return;
+      }
+      setStatus('checking');
+      // Same path as GPS: legality is confirmed (and the token signed) by the server.
+      await finishVerification(normalized, true);
+    },
+    [finishVerification]
+  );
 
   const value = useMemo(
-    () => ({ status, stateAbbr, selfReported, verifyLocation, ensureFresh, submitManualState }),
-    [status, stateAbbr, selfReported, verifyLocation, ensureFresh, submitManualState]
+    () => ({
+      status,
+      stateAbbr,
+      selfReported,
+      locationToken,
+      verifyLocation,
+      ensureFresh,
+      submitManualState,
+    }),
+    [status, stateAbbr, selfReported, locationToken, verifyLocation, ensureFresh, submitManualState]
   );
 
   return <ThcGateContext.Provider value={value}>{children}</ThcGateContext.Provider>;

@@ -21,6 +21,7 @@ import { CrossCategoryWarningModal } from '@/components/CrossCategoryWarningModa
 import { EmptyState } from '@/components/EmptyState';
 import { ScanToast } from '@/components/ScanToast';
 import { useMode } from '@/context/ModeContext';
+import { useThcGate } from '@/context/ThcGateContext';
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { PRODUCTS, findProductByBarcode } from '@/src/data/recipes';
 import { safeNotification } from '@/utils/haptics';
@@ -98,6 +99,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   const [identifying, setIdentifying] = useState(false);
   const [mismatch, setMismatch] = useState<CategoryMismatch | null>(null);
   const { setMode, setPendingProduct } = useMode();
+  const { locationToken } = useThcGate();
   const router = useRouter();
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
@@ -188,6 +190,14 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       return;
     }
 
+    // Fail closed: THC identification requires the server-signed location
+    // token. Without it, don't even capture/send — the server rejects with
+    // 403 anyway.
+    if (mode === 'thc' && !locationToken) {
+      showToast('Location verification required — please re-verify your state', 2800);
+      return;
+    }
+
     setIdentifying(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -210,7 +220,14 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       const res = await fetch(`https://${domain}/api/identify-bottle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: photo.base64, products: hints, mode }),
+        body: JSON.stringify({
+          imageBase64: photo.base64,
+          products: hints,
+          mode,
+          // Server-side THC geo-enforcement: THC identification is rejected
+          // without a valid server-signed location token.
+          ...(mode === 'thc' ? { locationToken } : {}),
+        }),
       });
       if (!res.ok) {
         showToast('Product not found — try browsing manually', 2400);

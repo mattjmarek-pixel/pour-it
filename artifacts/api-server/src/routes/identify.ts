@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
 import { signCategoryToken } from "../utils/categoryToken";
+import { verifyLocationToken } from "../utils/locationToken";
 
 const router = Router();
 
@@ -80,10 +81,11 @@ function isRecipe(v: unknown): v is AIRecipe {
 }
 
 router.post("/identify-bottle", async (req, res) => {
-  const { imageBase64, products, mode } = req.body as {
+  const { imageBase64, products, mode, locationToken } = req.body as {
     imageBase64?: string;
     products?: ProductHint[];
     mode?: string;
+    locationToken?: string;
   };
 
   if (!imageBase64) {
@@ -96,6 +98,25 @@ router.post("/identify-bottle", async (req, res) => {
       error: 'mode is required and must be one of "spirits", "thc", "mocktails"',
     });
     return;
+  }
+
+  // SERVER-SIDE THC GEO-ENFORCEMENT — parallel to the category-token layer.
+  // THC identification requires a server-signed location token proving the
+  // user's state was verified as legal. Missing/invalid/expired/illegal all
+  // fail closed, so bypassing the app's UI gate and calling this endpoint
+  // directly does not grant THC access.
+  if (mode === "thc") {
+    const loc = verifyLocationToken(locationToken);
+    if (!loc.ok) {
+      req.log.warn({ reason: loc.reason }, "Blocked THC identify without valid location token");
+      res.status(403).json({
+        error: "location_restricted",
+        reason: loc.reason,
+        message:
+          "THC features require verified location in a state where recreational cannabis is legal.",
+      });
+      return;
+    }
   }
 
   const hints = products ?? [];

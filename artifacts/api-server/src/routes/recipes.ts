@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
 import { verifyCategoryToken } from "../utils/categoryToken";
+import { verifyLocationToken } from "../utils/locationToken";
 
 const router = Router();
 
@@ -14,6 +15,7 @@ interface GenerateRequestBody {
   category?: "spirits" | "thc" | "mocktails";
   existingRecipeTitles?: string[];
   verificationToken?: string;
+  locationToken?: string;
 }
 
 interface GeneratedIngredient {
@@ -46,6 +48,7 @@ router.post("/generate", async (req, res) => {
     category,
     existingRecipeTitles = [],
     verificationToken,
+    locationToken,
   } = (req.body ?? {}) as GenerateRequestBody;
 
   if (!productName || !spiritType || !category) {
@@ -53,6 +56,26 @@ router.post("/generate", async (req, res) => {
       error: "productName, spiritType, and category are required",
     });
     return;
+  }
+
+  // SERVER-SIDE THC GEO-ENFORCEMENT — parallel to the category-token layer
+  // below. THC recipe generation requires a server-signed location token; a
+  // raw client-claimed state is never accepted. Fail closed.
+  if (category === "thc") {
+    const loc = verifyLocationToken(locationToken);
+    if (!loc.ok) {
+      req.log.warn(
+        { productName, reason: loc.reason },
+        "Blocked THC recipe generation without valid location token"
+      );
+      res.status(403).json({
+        error: "location_restricted",
+        reason: loc.reason,
+        message:
+          "THC features require verified location in a state where recreational cannabis is legal.",
+      });
+      return;
+    }
   }
 
   // SERVER-SIDE CATEGORY ENFORCEMENT — does not trust the client.
