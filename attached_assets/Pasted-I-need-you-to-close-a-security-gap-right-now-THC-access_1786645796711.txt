@@ -1,0 +1,20 @@
+I need you to close a security gap: right now, THC access is only gated in the app UI (via ThcGateContext.tsx and ThcGate.tsx), but the API server itself does not check the user's state. This means someone could bypass the location gate entirely by calling the THC-related API endpoints directly, without ever going through the app's UI.
+
+What I need you to do:
+
+1. Find every API endpoint related to THC scanning/identification/recipes (likely in the api-server, touching identify.ts, recipes.ts, or similar files used for the THC mode specifically).
+
+2. Add server-side enforcement so that THC-related requests require proof of a legal state, similar in spirit to how categoryToken.ts already enforces category safety with a signed token. Specifically:
+   a. When the app verifies the user's state as legal (client-side, via ThcGateContext), have it request a signed "location verification token" from the server — similar pattern to categoryToken.ts. The server should sign this token only if the client-reported state is genuinely on the legal states list (cross-check server-side, don't just trust the client's word for it).
+   b. Attach this signed token to all THC-related API requests, the same way the category token is already attached to recipe generation requests.
+   c. On the server, any THC-related endpoint should verify the signed token before processing the request. If the token is missing, invalid, expired, or doesn't match, reject the request (fail closed — same principle as the rest of the app's safety architecture).
+
+3. Set a reasonable expiration on this token (e.g. 30-60 minutes) so it can't be captured once and reused indefinitely from a different location.
+
+4. Do not trust any client-supplied state value directly (e.g. a raw "state": "IL" field in a request body) as the sole basis for allowing access — that would be trivially spoofable. The whole point is the server has to independently verify legality, not just take the client's word.
+
+5. Show me exactly which server files and client files you changed, and the diff for the new token-issuing endpoint and the enforcement check.
+
+6. Run typecheck and the full test suite, and paste the output.
+
+Do not touch categoryToken.ts, identify.ts's existing category logic, recipes.ts's existing token checks, or CrossCategoryWarningModal.tsx — those systems already work correctly. This is a new, parallel enforcement layer specifically for THC state legality, following the same fail-closed pattern.
