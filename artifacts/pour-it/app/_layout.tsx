@@ -17,6 +17,7 @@ import { Platform, UIManager } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ThcGateProvider } from "@/context/ThcGateContext";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -71,9 +72,11 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <ModeProvider>
-                <SavedRecipesProvider>
-                  <RootLayoutNav />
-                </SavedRecipesProvider>
+                <ThcGateProvider>
+                  <SavedRecipesProvider>
+                    <RootLayoutNav />
+                  </SavedRecipesProvider>
+                </ThcGateProvider>
               </ModeProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

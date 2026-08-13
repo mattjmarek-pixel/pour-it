@@ -1,1 +1,2 @@
 - [Cross-category safety enforcement](cross-category-safety.md) — server-side catalog outranks client and vision model; blocking modal, no bypass; keep server catalog in lockstep with mobile data.
+- [THC geo-gate](thc-geo-gate.md) — fail-closed, session-scoped, client-side only; legal-state list is data the user must keep current; expo-location reverse geocoding doesn't work on web.

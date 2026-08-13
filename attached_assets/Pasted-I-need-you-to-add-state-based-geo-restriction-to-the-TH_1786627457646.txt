@@ -1,0 +1,27 @@
+I need you to add state-based geo-restriction to the THC tab/mode of this Expo/React Native app (pour-it). Cannabis legality varies by state, so THC recognition should only be available to users in states where it's legal.
+
+What I need you to do:
+
+1. Install expo-location if it's not already a dependency (it's part of the Expo ecosystem, should be a simple install).
+
+2. Create a new config file (e.g. legalStatesForTHC.ts) that exports a list of US state abbreviations where THC/cannabis use is currently legal (recreational or medical — recreational only is fine to start, but structure it so it's easy to update later, since state laws change). Please research and populate this list with currently accurate data as of now.
+
+3. Build a location-check flow:
+   a. On first launch of the THC tab (or app startup), request location permission via expo-location.
+   b. If permission is granted, get the user's coordinates and reverse-geocode to a US state.
+   c. Check that state against the legalStatesForTHC list.
+   d. If permission is denied, or location can't be determined, or reverse geocoding fails — treat this as "not verified" and default to blocking THC access (fail closed, don't fail open). Do not assume the user is in a legal state if we can't confirm it.
+
+4. Add a manual fallback: if GPS/location fails or is denied, show a simple manual state-selection screen (a dropdown or list of US states) so the user can self-report their state. Cross-check their selection against the legal states list the same way.
+
+5. Update the THC tab so:
+   - If the verified (or self-reported) state is on the legal list, the tab works normally.
+   - If not, the tab is still visible in the tab bar (don't hide it), but tapping into it shows a clear, professional message like "THC recognition isn't available in your state" instead of the scan interface. No scan functionality, no AI Identify button, nothing bypassable from this screen.
+
+6. This check should re-run periodically or at least once per app session — don't just check once at install and cache it forever, since a user could travel to a different state.
+
+7. Show me which files you created/changed, and the diff for the THC tab component specifically.
+
+8. Run typecheck and the test suite after this change and paste the output.
+
+Do not touch the Spirits or Mocktails tabs, or any of the existing safety/token files (categoryToken.ts, identify.ts, recipes.ts, CrossCategoryWarningModal.tsx) — this is only about gating access to the THC tab itself.

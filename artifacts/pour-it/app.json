@@ -16,13 +16,16 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "PourIt uses your location to confirm THC features are available in your state.",
         "NSCameraUsageDescription": "PourIt uses your camera to scan bottle barcodes and product labels to find matching recipes.",
         "NSPhotoLibraryUsageDescription": "PourIt can access your photo library to scan labels from saved images."
       }
     },
     "android": {
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -37,6 +40,12 @@
       ],
       "expo-font",
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PourIt uses your location to confirm THC features are available in your state."
+        }
+      ],
       [
         "expo-camera",
         {
