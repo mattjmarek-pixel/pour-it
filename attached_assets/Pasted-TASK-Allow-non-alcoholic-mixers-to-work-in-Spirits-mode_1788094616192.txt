@@ -1,0 +1,70 @@
+TASK: Allow non-alcoholic mixers to work in Spirits mode, Mocktails mode, AND THC mode, while keeping alcohol blocked from Mocktails and THC mode, keeping THC blocked from Spirits and Mocktails mode, adding a quality gate so the AI never forces a bad recipe onto a mixer that doesn't have a good pairing, and improving the cross-category rejection messaging to tell users which mode to switch to.
+
+CONTEXT: Currently the cross-category safety gates require the scanned item's category to exactly match the active app mode (spirits/thc/mocktail). This incorrectly blocks non-alcoholic mixers (tonic water, orange juice, soda, syrup, brine, broth, etc.) from being scanned in Spirits or THC mode, even though mixers are just drink ingredients and pose no safety risk there. Separately, when a genuine cross-category mismatch IS correctly rejected (e.g. a THC product scanned in Spirits mode), the rejection currently gives no guidance on what to do next.
+
+PART 1 — CATEGORY GATE LOGIC (replace exact-match with this 3-rule logic):
+1. If item category is "thc" -> allow ONLY in THC mode. Reject in Spirits mode and Mocktails mode (unchanged behavior).
+2. If item category is "spirits" (contains alcohol) -> allow ONLY in Spirits mode. Reject in Mocktails mode AND THC mode (unchanged — alcohol must never be allowed in THC mode; no alcohol+THC mixing recommendations).
+3. If item is a safe, human-consumable, non-alcoholic, non-THC BEVERAGE (i.e., not spirits, not THC) -> treat it as a "mixer" and allow it in ALL THREE modes: Spirits, Mocktails, and THC.
+
+Scope for rule 3 is limited to actual drinkable beverages (juices, sodas, waters, syrups, brines, broths, etc.) that already pass the existing "safe for human consumption" identification check. Do NOT extend this to non-liquid pantry ingredients (spices, pastes, powders) — that is an out-of-scope future/premium feature. If the four sequential hard gates in identify.ts determine the scanned item is not a real, safe, consumable beverage, it should still be rejected as before — this task only changes which app MODES a non-alcoholic beverage is allowed in, not what counts as safe.
+
+Do NOT build a curated allowlist of "approved mixer types." Any beverage that passes the existing safety identification and isn't alcohol or THC qualifies. Unusual-sounding mixers (bone broth, pickle brine, savory or fermented ingredients) are not inherently excluded — real cocktail culture successfully uses ingredients like these (e.g. the classic Bloody Bull and Bullshot both use beef broth, dating back to the 1950s).
+
+PART 1B — CROSS-CATEGORY REJECTION MESSAGING:
+When the gate logic in Part 1 rejects a scan for being in the wrong mode, the CrossCategoryWarningModal must tell the user which mode would actually work for that item, not just block them with a generic error. This is a messaging improvement only — it does NOT add any bypass path, and it does NOT change what gets rejected vs. allowed.
+
+Examples of the required behavior:
+- THC item scanned while in Spirits mode -> modal explains this looks like a THC product and suggests switching to THC mode.
+- THC item scanned while in Mocktails mode -> same, suggest switching to THC mode.
+- Spirits/alcohol item scanned while in THC mode -> modal explains this looks like an alcoholic product and suggests switching to Spirits mode.
+- Spirits/alcohol item scanned while in Mocktails mode -> same, suggest switching to Spirits mode.
+
+The modal should NOT include a button that switches modes and immediately shows a recipe in one tap — the user should still consciously switch modes themselves (e.g. tapping the mode tab), keeping the existing "no bypass path" guarantee intact. The modal can name the correct mode in its message, but should not auto-navigate or auto-load a recipe as a side effect of dismissing the modal.
+
+Do NOT apply this new messaging to the mixer quality gate from Part 3 ("no strong pairing found") — that is a different, non-safety outcome and should keep its own separate, low-key message as already specified.
+
+FILES LIKELY INVOLVED (verify actual current logic before editing):
+- artifacts/api-server/src/identify.ts (the four sequential hard gates — find the gate that checks category-vs-mode match and update it to the 3-rule logic above)
+- artifacts/api-server/src/categoryToken.ts (the signed HMAC-SHA256 token — check whether it encodes a single fixed "valid mode" or a category; if it encodes mode directly, update it to encode category instead, and have the verification step apply the 3-rule logic when checking token category against current mode)
+- artifacts/api-server/src/recipes.ts (the catalog-based 409 rejection — update to allow mixer-category items through for spirits, mocktail, AND thc mode requests)
+- artifacts/pour-it/[wherever CrossCategoryWarningModal.tsx and ScanView.tsx live] (update the client-side fail-closed guard to reflect the 3-rule logic, not exact match — a mixer scanned in Spirits or THC mode should NOT trigger the CrossCategoryWarningModal; and update the modal's messaging per Part 1B)
+- artifacts/pour-it/[RecipeList.tsx location] (recipe display logic)
+
+PART 2 — RECIPE GENERATION BEHAVIOR FOR MIXER SCANS:
+- In Spirits mode, when a mixer is scanned:
+  - Show a Canonical tier of 2-3 well-known classic pairings immediately if they exist (following the existing Canonical -> Craft -> AI-generated recipe architecture and tier badges: amber/CLASSIC, white-grey/CRAFT, purple/AI).
+  - Add a UI option like "I have a specific spirit" where the user can select or type their spirit. When they do, generate a Craft or clearly-labeled AI recipe tailored to that exact mixer + spirit combination.
+- In THC mode, when a mixer is scanned:
+  - Same pattern as Spirits mode: show known/classic THC drink pairings for that mixer if they exist, plus an "I have a specific THC product" option that lets the user specify their product for a tailored recipe.
+  - CRITICAL SAFETY CONSTRAINT: THC-mixer recipes must contain ONLY flavor and mixing/preparation instructions. Do NOT generate, suggest, or imply any THC dosing, potency, or "how much to use for X effect" guidance. This must match whatever dosing-safety restraint the existing THC recipe generation already follows elsewhere in the app — do not introduce new or different dosing-related behavior for this feature. If unsure how the existing THC recipe flow handles this, inspect it first and mirror it exactly.
+- In Mocktails mode, when a mixer is scanned:
+  - Skip any spirit- or THC-pairing step entirely (mocktails must stay fully alcohol-free and THC-free).
+  - Show mocktail recipes using that mixer, following the same Canonical -> Craft -> AI tier structure.
+- Do not change behavior for alcohol/spirit-tagged items scanned in Mocktails mode or THC mode — those must still be rejected exactly as before (with the improved messaging from Part 1B).
+
+PART 3 — MIXER RECIPE QUALITY GATE (applies to Spirits mode and THC mode, only for mixer-category scans):
+This is expected to trigger RARELY — most safe mixers can pair with something given the right flavor logic. Keep this lightweight; it is a rare fallback, not a primary UX path.
+
+Before generating a recipe for a scanned mixer, the AI must genuinely evaluate whether a good drink is possible with that mixer — the same judgment a skilled bartender (or, for THC mode, a skilled infused-beverage maker) would make. Do NOT treat unusual-sounding mixers as inherently bad. There is no fixed list of "good" or "bad" mixers — evaluate per-item based on actual flavor logic, not on how unusual the ingredient sounds.
+
+If the AI determines a genuinely good pairing exists:
+- Proceed with the normal Canonical -> Craft -> AI tier generation described in Part 2.
+
+If the AI determines no good pairing exists for that mixer (this should be rare):
+- Do NOT fabricate or force a mediocre recipe just to have something to show.
+- Return a distinct "no strong pairing found" result. This is NOT a rejection/409 — it's a quality outcome, not a safety outcome, so it must NOT trigger CrossCategoryWarningModal or any safety-gate UI.
+- The UI should say something honest and low-key, e.g. "We couldn't find a pairing we'd actually recommend for this in Spirits mode."
+- Optionally suggest checking another mode for that same mixer, since it may make sense there instead.
+
+This quality gate is a separate code path from the safety gates built in Part 1, separate from the rejection messaging in Part 1B, and separate from the dosing-safety constraint in Part 2. Do not merge these concerns together — safety gates determine whether scanning is ALLOWED; the rejection messaging in 1B only applies to genuine safety rejections; the dosing constraint determines what CONTENT is allowed in a THC recipe; this quality gate determines whether a GOOD RECIPE exists at all, and only runs after the safety gates have already passed.
+
+VERIFICATION STEPS AFTER CHANGES (report results back with grep/cat output, not just "done"):
+1. grep the updated gate logic in identify.ts and paste it so we can confirm the 3-rule branching is correct (not just a broadened exact-match).
+2. grep categoryToken.ts to confirm token verification correctly applies the 3-rule logic.
+3. grep recipes.ts to confirm the 409 rejection logic matches the 3-rule logic, and that the new "no strong pairing found" quality outcome is a distinct code path from the 409.
+4. Confirm CrossCategoryWarningModal.tsx logic/trigger conditions were updated, that there is still NO bypass path in the modal itself, that the modal is NOT triggered by the quality gate's "no strong pairing found" result, and that the modal's message text now names the correct mode to switch to for each rejection case (paste the actual message strings).
+5. Explain in plain language, with specific confirmation for each: (a) a spirits item scanned in THC mode is still rejected (now with a message suggesting Spirits mode), (b) a spirits item scanned in Mocktails mode is still rejected (now with a message suggesting Spirits mode), (c) a THC item scanned in Spirits mode is still rejected (now with a message suggesting THC mode), (d) a THC item scanned in Mocktails mode is still rejected (now with a message suggesting THC mode). All four must still be blocked — only the messaging changed.
+6. Show me the exact prompt/instructions used for THC-mixer recipe generation so I can confirm no dosing or potency language snuck in.
+
+Do not touch: the THC geo-gating system, the THC legal-states list, RevenueCat, or any camera/hardware-related code. This task is scoped only to the category gating logic, cross-category rejection messaging, and mixer recipe flow described above.
