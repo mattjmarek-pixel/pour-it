@@ -3,15 +3,14 @@ name: Cross-category safety enforcement
 description: How PourIt enforces that a product from one mode can never yield another mode's recipes
 ---
 
-Rule: category integrity is enforced server-side with a deterministic catalog, never by trusting the client or the vision model's own classification.
+Rule: category integrity is enforced server-side with a deterministic catalog, never by trusting the client or vision model. Known catalog identity/category outranks AI classification.
 
-**Why:** Safety-critical requirement — a THC product must never yield a Spirits recipe (or vice versa). AI classification can misfire and clients can be bypassed, so the static catalog outranks both.
+**Why:** AI can misclassify a known mixer, while a malicious caller can send a compatible product ID with an incompatible product name. Trusting either field independently can bypass category controls or poison an AI prompt.
 
 **How to apply:**
-- The server keeps its own product catalog (`api-server/src/data/catalog.ts`) mirroring the mobile catalog. If products are added/moved in the mobile data, update it in lockstep.
-- Name lookups for safety checks use aggressive normalization (lowercase, strip diacritics and non-alphanumerics) plus substring containment, so punctuation/spacing tweaks cannot evade the block.
-- `/api/identify-bottle` requires `mode`, classifies category+confidence first, and blocks on: non-beverage, uncertain/low confidence, category≠mode, or a catalog cross-check hit — returning no recipe payload in any blocked branch.
-- `/api/recipes/generate` returns 409 for any catalog product (by id or fuzzy name) whose mode ≠ requested category.
-- Client shows a blocking modal with only "Switch mode" or "Cancel" — no bypass. Mode-switch handoff uses ModeContext `pendingProduct`, consumed only when `pending.mode === screen mode`.
-- Note: mobile product mode is structural (`PRODUCTS[mode]` arrays); `Product.category` is a subtype like "Vodka", not the mode.
-- Non-catalog (AI-vision) products cannot be checked against the catalog, so `/generate` requires a short-lived (5 min) HMAC-signed verification token issued by `/identify-bottle` only after all gates pass. Token binds normalized name + category; missing/invalid/mismatch → 409 `category_mismatch`, expired → 409 `token_expired` (client shows "re-scan" message). Secret is `CATEGORY_TOKEN_SECRET` env var — must also be set in production deployments or non-catalog generation will fail closed.
+- When both catalog ID and name resolve, require them to identify the same canonical product; reject conflicts and send only the canonical catalog name to AI.
+- Unknown products require a short-lived signed attestation of their normalized name and product category. Verify compatibility for the requested mode on every AI endpoint.
+- Mixers are compatible with all modes; spirits and THC products are compatible only with their matching mode.
+- Keep consumability checks fail-closed before unknown-product category compatibility. A known catalog category may correct an AI spirits/THC misclassification.
+- Wrong-mode UI is dismiss-only guidance; never auto-switch modes or offer a bypass.
+- Every THC AI path must independently enforce location and category, and prohibit dose, potency, effects, amount, milligrams, redosing, and alcohol mixing.

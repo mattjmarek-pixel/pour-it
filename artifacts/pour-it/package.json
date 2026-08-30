@@ -70,6 +70,7 @@
     "@react-navigation/elements": "^2.9.19",
     "@react-navigation/native": "^7.2.5",
     "@react-navigation/native-stack": "^7.16.0",
+    "@workspace/category-policy": "workspace:*",
     "@workspace/thc-legal-states": "workspace:*",
     "expo-camera": "^17.0.10",
     "stacktrace-parser": "^0.1.11"

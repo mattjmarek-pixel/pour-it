@@ -9,17 +9,17 @@ interface CachedRecipe {
   cachedAt: number;
 }
 
-function cacheKey(productId: string): string {
-  return `ai_recipe:${CACHE_VERSION}:${productId}`;
+function cacheKey(productId: string, mode: string, pairingId?: string): string {
+  return `ai_recipe:${CACHE_VERSION}:${mode}:${productId}${pairingId ? `:${pairingId}` : ''}`;
 }
 
-export async function getCachedAIRecipe(productId: string): Promise<Recipe | null> {
+export async function getCachedAIRecipe(productId: string, mode: string, pairingId?: string): Promise<Recipe | null> {
   try {
-    const raw = await AsyncStorage.getItem(cacheKey(productId));
+    const raw = await AsyncStorage.getItem(cacheKey(productId, mode, pairingId));
     if (!raw) return null;
     const cached = JSON.parse(raw) as CachedRecipe;
     if (Date.now() - cached.cachedAt > TTL_MS) {
-      await AsyncStorage.removeItem(cacheKey(productId));
+      await AsyncStorage.removeItem(cacheKey(productId, mode, pairingId));
       return null;
     }
     return cached.recipe;
@@ -28,9 +28,9 @@ export async function getCachedAIRecipe(productId: string): Promise<Recipe | nul
   }
 }
 
-export async function setCachedAIRecipe(productId: string, recipe: Recipe): Promise<void> {
+export async function setCachedAIRecipe(productId: string, mode: string, recipe: Recipe, pairingId?: string): Promise<void> {
   try {
     const cached: CachedRecipe = { recipe, cachedAt: Date.now() };
-    await AsyncStorage.setItem(cacheKey(productId), JSON.stringify(cached));
+    await AsyncStorage.setItem(cacheKey(productId, mode, pairingId), JSON.stringify(cached));
   } catch {}
 }

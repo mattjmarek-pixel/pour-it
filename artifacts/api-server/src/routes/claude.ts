@@ -1,5 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Router } from "express";
+import {
+  catalogModeToProductCategory,
+  isAppMode,
+  isCategoryCompatible,
+  type AppMode,
+} from "@workspace/category-policy";
+
+import { resolveCatalogProduct } from "../data/catalog";
+import { verifyCategoryToken } from "../utils/categoryToken";
+import { verifyLocationToken } from "../utils/locationToken";
 
 const router = Router();
 
@@ -24,15 +34,107 @@ interface RecipePayload {
   steps?: string[];
 }
 
+export function buildCustomizationSystemPrompt(mode: AppMode): string {
+  const modeSafety =
+    mode === "thc"
+      ? `THC CONTENT SAFETY:
+- Recipe content is limited to flavor pairing and mixing/preparation instructions.
+- Never provide or imply THC dosing, potency, expected effects, amount to use, milligrams, effect-based servings, onset or duration, or redosing guidance.
+- Never combine THC with alcohol or suggest adding alcoholic ingredients.
+- Do not put a numeric quantity on a THC-containing ingredient; identify it generically and tell the user to follow the product label.`
+      : mode === "mocktails"
+        ? "MOCKTAIL SAFETY: Use only zero-alcohol, non-THC ingredients."
+        : "SPIRITS CONTEXT: Never add THC or cannabis ingredients.";
+
+  return `You are a creative mixologist. Given a drink recipe and a user's customization request, suggest a personalized variation with a new name, modified ingredients, and numbered steps. Be specific and concise. Format your response with: **Recipe Name**, then Ingredients (bulleted list), then Steps (numbered), then a one-line description.
+
+${modeSafety}`;
+}
+
 router.post("/claude-stream", async (req, res) => {
-  const { recipe, prompt } = req.body as {
-    recipe: RecipePayload;
-    prompt: string;
+  const {
+    recipe,
+    prompt,
+    mode,
+    productId,
+    productName,
+    verificationToken,
+    locationToken,
+  } = req.body as {
+    recipe?: RecipePayload;
+    prompt?: unknown;
+    mode?: unknown;
+    productId?: unknown;
+    productName?: unknown;
+    verificationToken?: unknown;
+    locationToken?: unknown;
   };
 
-  if (!recipe || !prompt) {
-    res.status(400).json({ error: "recipe and prompt are required" });
+  if (
+    !recipe ||
+    typeof prompt !== "string" ||
+    !prompt.trim() ||
+    !isAppMode(mode) ||
+    typeof productName !== "string" ||
+    !productName ||
+    (productId !== undefined && typeof productId !== "string") ||
+    (verificationToken !== undefined && typeof verificationToken !== "string")
+  ) {
+    res.status(400).json({
+      error: "recipe, prompt, mode, and productName are required",
+    });
     return;
+  }
+
+  if (mode === "thc") {
+    const location = verifyLocationToken(locationToken);
+    if (!location.ok) {
+      res.status(403).json({
+        error: "location_restricted",
+        reason: location.reason,
+        message:
+          "THC features require verified location in a state where recreational cannabis is legal.",
+      });
+      return;
+    }
+  }
+
+  const catalogResolution = resolveCatalogProduct(
+    typeof productId === "string" ? productId : undefined,
+    productName
+  );
+  if (catalogResolution.conflict) {
+    res.status(409).json({
+      error: "category_mismatch",
+      message: "The product ID and name refer to different catalog products.",
+    });
+    return;
+  }
+  const catalogEntry = catalogResolution.entry;
+  if (catalogEntry) {
+    const productCategory = catalogModeToProductCategory(catalogEntry.mode);
+    if (!productCategory || !isCategoryCompatible(mode, productCategory)) {
+      res.status(409).json({
+        error: "category_mismatch",
+        message: `${catalogEntry.name} is not compatible with ${mode} customization.`,
+      });
+      return;
+    }
+  } else {
+    const verification =
+      typeof verificationToken === "string"
+        ? verifyCategoryToken(verificationToken, productName, mode)
+        : ({ ok: false, reason: "invalid" } as const);
+    if (!verification.ok) {
+      res.status(409).json({
+        error:
+          verification.reason === "expired"
+            ? "token_expired"
+            : "category_mismatch",
+        message: "Please re-scan the product before customizing it.",
+      });
+      return;
+    }
   }
 
   const recipeTitle = recipe.title ?? recipe.name ?? "Untitled";
@@ -64,8 +166,7 @@ Steps: ${(recipe.steps ?? []).join(" | ")}
     const stream = client.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 8192,
-      system:
-        "You are a creative mixologist. Given a drink recipe and a user's customization request, suggest a personalized variation with a new name, modified ingredients, and numbered steps. Be specific, fun, and concise. Format your response with: **Recipe Name**, then Ingredients (bulleted list), then Steps (numbered), then a one-line description.",
+      system: buildCustomizationSystemPrompt(mode),
       messages: [
         {
           role: "user",

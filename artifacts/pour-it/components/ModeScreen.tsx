@@ -25,18 +25,6 @@ export function ModeScreen({ mode }: ModeScreenProps) {
 
   const accentColor = MODE_COLORS[mode];
 
-  // When the user confirms "Switch to X mode" in the cross-category warning,
-  // the matched product is handed over via context. Safety: only consume it
-  // if it actually belongs to THIS mode.
-  useEffect(() => {
-    if (pendingProduct && pendingProduct.mode === mode) {
-      setSelectedProduct(pendingProduct.product);
-      setSelectedCategory(null);
-      setView('recipes');
-      setPendingProduct(null);
-    }
-  }, [pendingProduct, mode, setPendingProduct]);
-
   const handleProductFound = (product: Product) => {
     setSelectedProduct(product);
     setView('recipes');
@@ -101,6 +89,8 @@ export function ModeScreen({ mode }: ModeScreenProps) {
       <AIPanel
         visible={aiVisible}
         recipe={aiRecipe}
+        product={selectedProduct}
+        mode={mode}
         accentColor={accentColor}
         onClose={() => setAiVisible(false)}
       />

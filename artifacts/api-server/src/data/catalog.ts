@@ -1,8 +1,15 @@
-export type CatalogMode = "spirits" | "thc" | "mocktails";
+import type { AppMode } from "@workspace/category-policy";
 
-interface CatalogEntry {
+export type CatalogMode = AppMode;
+
+export interface CatalogEntry {
   name: string;
   mode: CatalogMode;
+}
+
+export interface CatalogResolution {
+  entry: CatalogEntry | null;
+  conflict: boolean;
 }
 
 /**
@@ -83,4 +90,20 @@ export function lookupCatalogByName(productName: string): CatalogEntry | null {
     if (key.length >= 6 && normalized.includes(key)) return entry;
   }
   return null;
+}
+
+/**
+ * Resolves untrusted client identity fields without allowing a compatible ID
+ * to smuggle a different known product name into an AI prompt.
+ */
+export function resolveCatalogProduct(
+  productId: string | undefined,
+  productName: string
+): CatalogResolution {
+  const idEntry = productId ? lookupCatalogById(productId) : null;
+  const nameEntry = lookupCatalogByName(productName);
+  return {
+    entry: idEntry ?? nameEntry,
+    conflict: Boolean(idEntry && nameEntry && idEntry !== nameEntry),
+  };
 }

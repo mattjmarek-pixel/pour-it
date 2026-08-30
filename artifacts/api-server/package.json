@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/category-policy": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/thc-legal-states": "workspace:*",
     "cookie-parser": "^1.4.7",

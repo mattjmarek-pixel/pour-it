@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import type { AppMode, Product } from '@/src/data/recipes';
 import { PRODUCTS } from '@/src/data/recipes';
+import { catalogModeToProductCategory } from '@workspace/category-policy';
 import { safeImpact } from '@/utils/haptics';
 
 interface ProductCardProps {
@@ -143,7 +144,10 @@ export function ProductGrid({ mode, accentColor, category, onProductSelected, on
               product={item}
               accentColor={accentColor}
               index={index}
-              onSelect={onProductSelected}
+              onSelect={(p) => {
+                const pCategory = catalogModeToProductCategory(mode);
+                onProductSelected({ ...p, productCategory: pCategory || undefined });
+              }}
             />
           )}
           showsVerticalScrollIndicator={false}

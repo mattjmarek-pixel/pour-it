@@ -15,7 +15,7 @@ import { AIPanel } from "@/components/AIPanel";
 import { EmptyState } from "@/components/EmptyState";
 import { MODE_COLORS } from "@/constants/colors";
 import { useSavedRecipes } from "@/context/SavedRecipesContext";
-import type { Recipe, RecipeTier } from "@/src/data/recipes";
+import type { AppMode, Product, Recipe, RecipeTier } from "@/src/data/recipes";
 import { safeImpact } from "@/utils/haptics";
 
 const TIER_LABELS: Record<RecipeTier, string> = {
@@ -53,6 +53,8 @@ export default function SavedScreen() {
   const { savedRecipes, unsaveRecipe } = useSavedRecipes();
   const [aiVisible, setAiVisible] = useState(false);
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
+  const [aiProduct, setAiProduct] = useState<Product | null>(null);
+  const [aiMode, setAiMode] = useState<AppMode>("spirits");
   const [aiAccent, setAiAccent] = useState("#D4A843");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -185,6 +187,8 @@ export default function SavedScreen() {
                           onPress={() => {
                             safeImpact(Haptics.ImpactFeedbackStyle.Medium);
                             setAiRecipe(recipe);
+                            setAiProduct(product);
+                            setAiMode(mode);
                             setAiAccent(accent);
                             setAiVisible(true);
                           }}
@@ -205,6 +209,8 @@ export default function SavedScreen() {
       <AIPanel
         visible={aiVisible}
         recipe={aiRecipe}
+        product={aiProduct}
+        mode={aiMode}
         accentColor={aiAccent}
         onClose={() => setAiVisible(false)}
       />

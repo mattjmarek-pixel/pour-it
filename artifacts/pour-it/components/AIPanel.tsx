@@ -17,7 +17,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Recipe } from '@/src/data/recipes';
+import { useThcGate } from '@/context/ThcGateContext';
+import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { safeImpact, safeNotification } from '@/utils/haptics';
 
 const STREAM_TIMEOUT_MS = 30_000;
@@ -25,11 +26,20 @@ const STREAM_TIMEOUT_MS = 30_000;
 interface AIPanelProps {
   visible: boolean;
   recipe: Recipe | null;
+  product: Product | null;
+  mode: AppMode;
   accentColor: string;
   onClose: () => void;
 }
 
-export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps) {
+export function AIPanel({
+  visible,
+  recipe,
+  product,
+  mode,
+  accentColor,
+  onClose,
+}: AIPanelProps) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const skeletonAnim = useRef(new Animated.Value(0.3)).current;
@@ -41,6 +51,7 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
   const [streaming, setStreaming] = useState(false);
   const [response, setResponse] = useState('');
   const [error, setError] = useState('');
+  const { locationToken } = useThcGate();
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -82,7 +93,15 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
   });
 
   const handleStream = async () => {
-    if (!recipe || streaming) return;
+    if (!recipe || !product || streaming) return;
+    if (product.aiGenerated && !product.verificationToken) {
+      setError('Please re-scan to continue — verification expired or unavailable.');
+      return;
+    }
+    if (mode === 'thc' && !locationToken) {
+      setError('Location verification required — please re-verify your state.');
+      return;
+    }
     Keyboard.dismiss();
     safeImpact(Haptics.ImpactFeedbackStyle.Medium);
     setStreaming(true);
@@ -110,7 +129,15 @@ export function AIPanel({ visible, recipe, accentColor, onClose }: AIPanelProps)
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
         },
-        body: JSON.stringify({ recipe, prompt }),
+        body: JSON.stringify({
+          recipe,
+          prompt,
+          mode,
+          productId: product.id,
+          productName: product.name,
+          verificationToken: product.verificationToken,
+          ...(mode === 'thc' ? { locationToken } : {}),
+        }),
         signal: signal as AbortSignal,
       });
 

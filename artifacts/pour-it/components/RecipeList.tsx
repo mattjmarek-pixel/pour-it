@@ -16,10 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonCard } from '@/components/SkeletonCard';
+import { PairingPickerModal } from '@/components/PairingPickerModal';
 import { useSavedRecipes } from '@/context/SavedRecipesContext';
 import { useThcGate } from '@/context/ThcGateContext';
 import type { AppMode, Recipe, RecipeTier, Product } from '@/src/data/recipes';
 import { getCachedAIRecipe, setCachedAIRecipe } from '@/src/services/recipeCache';
+import { isNoStrongPairingResponse } from '@/src/services/mixerFlow';
 import { safeImpact, safeNotification, safeSelection } from '@/utils/haptics';
 
 if (Platform.OS === 'android') {
@@ -196,6 +198,9 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [pairingProduct, setPairingProduct] = useState<Product | null>(null);
+  const [isPairingPickerOpen, setIsPairingPickerOpen] = useState(false);
+  const [noStrongPairingMsg, setNoStrongPairingMsg] = useState<string | null>(null);
   const { locationToken } = useThcGate();
 
   useEffect(() => {
@@ -203,12 +208,18 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     setAiRecipe(null);
     setAiLoading(false);
     setAiError(null);
+    setNoStrongPairingMsg(null);
 
     const hasStaticAI = product.recipes.some((r) => r.tier === 'ai');
-    if (hasStaticAI) return;
+    // Mixer scans in Spirits/THC run the quality-gated generator even without
+    // a selected pairing; static Classic/Craft recipes remain visible while
+    // that optional AI suggestion is evaluated.
+    const isMixer = product.productCategory === 'mixer' && (mode === 'spirits' || mode === 'thc');
+
+    if (hasStaticAI && !isMixer) return;
 
     (async () => {
-      const cached = await getCachedAIRecipe(product.id);
+      const cached = await getCachedAIRecipe(product.id, mode, pairingProduct?.id);
       if (cancelled) return;
       if (cached) {
         setAiRecipe(cached);
@@ -216,15 +227,12 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
       }
 
       // Fail closed: AI-identified (non-catalog) products must carry the
-      // server-signed verification token. Without it, don't even send the
-      // request — the server would reject it anyway (409).
+      // server-signed verification token.
       if (product.aiGenerated && !product.verificationToken) {
         setAiError('Please re-scan to continue — verification expired or unavailable.');
         return;
       }
 
-      // Fail closed: THC recipe generation requires the server-signed
-      // location token. Without it, the server rejects with 403 anyway.
       if (mode === 'thc' && !locationToken) {
         setAiError('Location verification required — please re-verify your state.');
         return;
@@ -246,8 +254,14 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             existingRecipeTitles: product.recipes.map((r) => r.title),
             verificationToken: product.verificationToken,
             ...(mode === 'thc' ? { locationToken } : {}),
+            ...(pairingProduct ? {
+              pairingProductId: pairingProduct.id,
+              pairingProductName: pairingProduct.name,
+              pairingVerificationToken: pairingProduct.verificationToken,
+            } : {})
           }),
         });
+
         if (!res.ok) {
           if (res.status === 409) {
             try {
@@ -262,34 +276,48 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           }
           return;
         }
-        const data = (await res.json()) as {
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (isNoStrongPairingResponse(data)) {
+          setNoStrongPairingMsg(
+            data.message ||
+              `We couldn't find a pairing we'd actually recommend for this in ${mode === 'spirits' ? 'Spirits' : 'THC'} mode.`
+          );
+          return;
+        }
+
+        const recipeData = data as {
           title?: string;
           description?: string;
           ingredients?: { amount: string; unit: string; name: string }[];
           steps?: string[];
           tags?: string[];
         };
+
         if (
-          !data.title ||
-          !data.description ||
-          !Array.isArray(data.ingredients) ||
-          !Array.isArray(data.steps) ||
-          !Array.isArray(data.tags)
+          !recipeData.title ||
+          !recipeData.description ||
+          !Array.isArray(recipeData.ingredients) ||
+          !Array.isArray(recipeData.steps) ||
+          !Array.isArray(recipeData.tags)
         ) {
           return;
         }
+
         const generated: Recipe = {
-          id: `${product.id}-ai-generated`,
-          title: data.title,
-          description: data.description,
+          id: `${product.id}-ai-generated-${pairingProduct ? pairingProduct.id : 'base'}`,
+          title: recipeData.title,
+          description: recipeData.description,
           tier: 'ai',
-          ingredients: data.ingredients,
-          steps: data.steps,
-          tags: data.tags,
+          ingredients: recipeData.ingredients,
+          steps: recipeData.steps,
+          tags: recipeData.tags,
         };
-        if (cancelled) return;
+
         setAiRecipe(generated);
-        void setCachedAIRecipe(product.id, generated);
+        void setCachedAIRecipe(product.id, mode, generated, pairingProduct?.id);
       } catch {
         // Silent failure — only show static recipes
       } finally {
@@ -300,10 +328,11 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     return () => {
       cancelled = true;
     };
-  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes, locationToken]);
+  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes, locationToken, product.aiGenerated, product.verificationToken, product.productCategory, pairingProduct]);
 
   const combined: Recipe[] = aiRecipe ? [...product.recipes, aiRecipe] : product.recipes;
   const sortedRecipes = [...combined].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
+  const isMixer = product.productCategory === 'mixer' && (mode === 'spirits' || mode === 'thc');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 0) }]}>
@@ -333,7 +362,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         </View>
       </View>
 
-      {sortedRecipes.length === 0 && !aiLoading ? (
+      {sortedRecipes.length === 0 && !aiLoading && !isMixer ? (
         <EmptyState
           icon="📖"
           title="No recipes found"
@@ -348,6 +377,47 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         >
+          {isMixer && (
+            <View style={styles.pairingSection}>
+              <Text style={[styles.pairingTitle, { color: accentColor }]}>Add a Pairing</Text>
+              <Text style={styles.pairingSubtitle}>What {mode === 'spirits' ? 'spirit' : 'THC product'} are you mixing this with?</Text>
+              <Pressable
+                style={styles.pairingBtn}
+                onPress={() => setIsPairingPickerOpen(true)}
+                accessibilityRole="button"
+                testID="pairing-picker-btn"
+              >
+                {pairingProduct ? (
+                  <View style={styles.pairingSelectedRow}>
+                    <Text style={styles.pairingEmoji}>{pairingProduct.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pairingName}>{pairingProduct.name}</Text>
+                      <Text style={styles.pairingBrand}>{pairingProduct.brand}</Text>
+                    </View>
+                    <Pressable
+                      style={styles.pairingClearBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setPairingProduct(null);
+                        setAiRecipe(null);
+                        setNoStrongPairingMsg(null);
+                      }}
+                      accessibilityLabel="Clear pairing"
+                      accessibilityRole="button"
+                    >
+                      <Feather name="x" size={18} color="rgba(255,255,255,0.5)" />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.pairingEmptyRow}>
+                    <Feather name="plus" size={18} color="rgba(255,255,255,0.7)" />
+                    <Text style={styles.pairingBtnText}>Select a product</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          )}
+
           {sortedRecipes.map((recipe) => (
             <RecipeCard
               key={recipe.id}
@@ -361,6 +431,12 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             />
           ))}
 
+          {noStrongPairingMsg && (
+            <View style={styles.noStrongPairingWrap}>
+              <Text style={styles.noStrongPairingText}>{noStrongPairingMsg}</Text>
+            </View>
+          )}
+
           {aiError && (
             <View style={styles.aiLoadingWrap}>
               <Text style={styles.aiErrorText}>{aiError}</Text>
@@ -373,6 +449,19 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
             </View>
           )}
         </ScrollView>
+      )}
+
+      {isMixer && (
+        <PairingPickerModal
+          visible={isPairingPickerOpen}
+          mode={mode}
+          accentColor={accentColor}
+          onSelect={(selected) => {
+            setPairingProduct(selected);
+            setIsPairingPickerOpen(false);
+          }}
+          onClose={() => setIsPairingPickerOpen(false)}
+        />
       )}
     </View>
   );
@@ -595,5 +684,81 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_400Regular',
     fontSize: 12,
     color: 'rgba(255,255,255,0.35)',
+  },
+  pairingSection: {
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 8,
+  },
+  pairingTitle: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  pairingSubtitle: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 12,
+  },
+  pairingBtn: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  pairingEmptyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  pairingBtnText: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  pairingSelectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  pairingEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  pairingName: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  pairingBrand: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  pairingClearBtn: {
+    padding: 8,
+  },
+  noStrongPairingWrap: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  noStrongPairingText: {
+    fontFamily: 'DMSans_400Regular',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

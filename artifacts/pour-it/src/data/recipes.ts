@@ -30,6 +30,7 @@ export interface Product {
   /** Server-issued signed token proving name+category was verified during AI identification (non-catalog products only). */
   verificationToken?: string;
   recipes: Recipe[];
+  productCategory?: 'spirits' | 'thc' | 'mixer';
 }
 
 export const CATEGORIES: Record<AppMode, string[]> = {

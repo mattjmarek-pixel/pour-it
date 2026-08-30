@@ -3,20 +3,16 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { AppMode } from '@/src/data/recipes';
-import { MODE_COLORS } from '@/constants/colors';
-
-const MODE_LABELS: Record<AppMode, string> = {
-  spirits: 'Spirits',
-  thc: 'THC',
-  mocktails: 'Mocktails',
-};
+import {
+  getCategoryMismatchMessage,
+  type SafetyProductCategory,
+} from '@/src/services/mixerFlow';
 
 interface CrossCategoryWarningModalProps {
   visible: boolean;
-  detectedCategory: AppMode;
+  detectedCategory: SafetyProductCategory;
   currentMode: AppMode;
   productName?: string;
-  onSwitchMode: () => void;
   onCancel: () => void;
 }
 
@@ -24,20 +20,20 @@ interface CrossCategoryWarningModalProps {
  * Fully blocking safety modal shown when a scanned/identified product belongs
  * to a different category than the active mode. There is intentionally no
  * "continue anyway" path, no tap-outside dismiss, and no swipe dismiss —
- * the only exits are switching to the correct mode or cancelling back to
- * the scanner.
+ * the only exit is cancelling back to the scanner.
  */
 export function CrossCategoryWarningModal({
   visible,
   detectedCategory,
   currentMode,
   productName,
-  onSwitchMode,
   onCancel,
 }: CrossCategoryWarningModalProps) {
-  const detectedLabel = MODE_LABELS[detectedCategory];
-  const currentLabel = MODE_LABELS[currentMode];
-  const detectedColor = MODE_COLORS[detectedCategory];
+  const message = getCategoryMismatchMessage(
+    detectedCategory,
+    currentMode,
+    productName
+  );
 
   return (
     <Modal
@@ -54,32 +50,17 @@ export function CrossCategoryWarningModal({
 
           <Text style={styles.title}>Different category detected</Text>
 
-          <Text style={styles.body}>
-            {productName
-              ? `${productName} looks like a ${detectedLabel} product, but you're in ${currentLabel} mode.`
-              : `This looks like a ${detectedLabel} product, but you're in ${currentLabel} mode.`}
-          </Text>
-          <Text style={styles.subBody}>
-            To keep recipes accurate and safe, {currentLabel} recipes can't be
-            shown for {detectedLabel} products.
-          </Text>
-
-          <Pressable
-            style={[styles.switchBtn, { backgroundColor: detectedColor }]}
-            onPress={onSwitchMode}
-            accessibilityRole="button"
-            accessibilityLabel={`Switch to ${detectedLabel} mode`}
-          >
-            <Text style={styles.switchBtnText}>Switch to {detectedLabel} mode</Text>
-          </Pressable>
+          <Text style={styles.body}>{message.body}</Text>
+          <Text style={styles.subBody}>{message.detail}</Text>
 
           <Pressable
             style={styles.cancelBtn}
             onPress={onCancel}
             accessibilityRole="button"
             accessibilityLabel="Cancel and return to scanner"
+            testID="mismatch-cancel-btn"
           >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
+            <Text style={styles.cancelBtnText}>Dismiss</Text>
           </Pressable>
         </View>
       </View>
@@ -138,19 +119,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 22,
-  },
-  switchBtn: {
-    width: '100%',
-    borderRadius: 100,
-    paddingVertical: 14,
-    alignItems: 'center',
-    minHeight: 44,
-    marginBottom: 10,
-  },
-  switchBtnText: {
-    fontFamily: 'DMSans_600SemiBold',
-    fontSize: 15,
-    color: '#0A0A0F',
   },
   cancelBtn: {
     width: '100%',

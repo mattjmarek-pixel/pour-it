@@ -15,15 +15,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
-
 import { CrossCategoryWarningModal } from '@/components/CrossCategoryWarningModal';
 import { EmptyState } from '@/components/EmptyState';
 import { ScanToast } from '@/components/ScanToast';
-import { useMode } from '@/context/ModeContext';
 import { useThcGate } from '@/context/ThcGateContext';
+import {
+  catalogModeToProductCategory,
+  isCategoryCompatible,
+  isProductCategory,
+  type ProductCategory,
+} from '@workspace/category-policy';
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { PRODUCTS, findProductByBarcode } from '@/src/data/recipes';
+import type { SafetyProductCategory } from '@/src/services/mixerFlow';
 import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
@@ -59,17 +63,9 @@ type IdentifyResponse =
     }
   | { status: 'not_found' };
 
-const APP_MODES: AppMode[] = ['spirits', 'thc', 'mocktails'];
-
-function isAppMode(value: string): value is AppMode {
-  return (APP_MODES as string[]).includes(value);
-}
-
 interface CategoryMismatch {
-  detectedCategory: AppMode;
+  detectedCategory: SafetyProductCategory;
   productName?: string;
-  /** Present only for deterministic barcode matches from the local catalog. */
-  product?: Product;
 }
 
 function slugify(value: string): string {
@@ -98,9 +94,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   const [toastMessage, setToastMessage] = useState('Product not found — try browsing manually');
   const [identifying, setIdentifying] = useState(false);
   const [mismatch, setMismatch] = useState<CategoryMismatch | null>(null);
-  const { setMode, setPendingProduct } = useMode();
   const { locationToken } = useThcGate();
-  const router = useRouter();
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
@@ -156,19 +150,23 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
     const found = findProductByBarcode(raw);
 
     if (found) {
-      if (found.mode === mode) {
+      const pCategory = catalogModeToProductCategory(found.mode);
+      if (pCategory && isCategoryCompatible(mode, pCategory)) {
         safeNotification(Haptics.NotificationFeedbackType.Success);
-        onProductFound(found.product);
+        onProductFound({ ...found.product, productCategory: pCategory });
         return;
       }
       // SAFETY: product belongs to a different category. Do NOT render the
       // product or its recipes — show the blocking warning modal instead.
       safeNotification(Haptics.NotificationFeedbackType.Warning);
-      setMismatch({
-        detectedCategory: found.mode,
-        productName: found.product.name,
-        product: found.product,
-      });
+      if (pCategory === 'spirits' || pCategory === 'thc') {
+        setMismatch({
+          detectedCategory: pCategory,
+          productName: found.product.name,
+        });
+      } else {
+        showToast("Couldn't confirm what this is — try scanning again or check the label", 2800);
+      }
       return;
     }
 
@@ -247,7 +245,11 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       }
 
       if (data.status === 'category_mismatch') {
-        if (isAppMode(data.detectedCategory) && data.detectedCategory !== mode) {
+        if (
+          isProductCategory(data.detectedCategory) &&
+          data.detectedCategory !== 'mixer' &&
+          !isCategoryCompatible(mode, data.detectedCategory)
+        ) {
           safeNotification(Haptics.NotificationFeedbackType.Warning);
           setMismatch({
             detectedCategory: data.detectedCategory,
@@ -260,17 +262,25 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       }
 
       if (data.status === 'matched') {
-        const matched = PRODUCTS[mode].find((p) => p.id === data.productId);
-        if (matched) {
+        const matchedEntry = (Object.entries(PRODUCTS) as [AppMode, Product[]][])
+          .flatMap(([catalogMode, products]) =>
+            products.map((product) => ({ catalogMode, product }))
+          )
+          .find(({ product }) => product.id === data.productId);
+        if (matchedEntry) {
+          const pCategory = catalogModeToProductCategory(matchedEntry.catalogMode);
           safeNotification(Haptics.NotificationFeedbackType.Success);
-          onProductFound(matched);
+          onProductFound({
+            ...matchedEntry.product,
+            productCategory: pCategory || undefined,
+          });
           return;
         }
         showToast('Product not found — try browsing manually', 2400);
         return;
       }
 
-      if (data.status === 'ai' && data.product.recipes.length > 0) {
+      if (data.status === 'ai') {
         const aiProduct = buildAIProduct(data.product, data.verificationToken);
         safeNotification(Haptics.NotificationFeedbackType.Success);
         onProductFound(aiProduct);
@@ -316,6 +326,9 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       aiGenerated: true,
       verificationToken,
       recipes,
+      productCategory: isProductCategory(aiProduct.category)
+        ? (aiProduct.category as ProductCategory)
+        : undefined,
     };
   };
 
@@ -326,22 +339,6 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       setScanned(false);
       setToastVisible(false);
     }, ms);
-  };
-
-  const handleMismatchSwitchMode = () => {
-    if (!mismatch) return;
-    const target = mismatch.detectedCategory;
-    // For deterministic barcode matches we hand the product over so the
-    // destination mode opens straight to its (correct-category) recipes.
-    // For AI-vision mismatches there is no identification payload by design —
-    // the user lands on the scanner in the right mode and scans again.
-    if (mismatch.product) {
-      setPendingProduct({ product: mismatch.product, mode: target });
-    }
-    setMismatch(null);
-    setMode(target);
-    router.replace(`/(tabs)/${target}`);
-    resetAfter(0);
   };
 
   const handleMismatchCancel = () => {
@@ -520,7 +517,6 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
           detectedCategory={mismatch.detectedCategory}
           currentMode={mode}
           productName={mismatch.productName}
-          onSwitchMode={handleMismatchSwitchMode}
           onCancel={handleMismatchCancel}
         />
       )}
