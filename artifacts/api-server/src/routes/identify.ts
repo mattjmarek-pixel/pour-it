@@ -96,16 +96,30 @@ For non_beverage, uncertain, low confidence, incompatible categories, or mixer c
     if (!isClassification(parsed)) {
       req.log.warn({ raw }, "Invalid identify-bottle response shape"); res.json({ status: "uncertain" } satisfies IdentifyResponse); return;
     }
-    if (parsed.category === "non_beverage") { res.json({ status: "not_a_drink" } satisfies IdentifyResponse); return; }
-    if (parsed.category === "uncertain" || parsed.confidence !== "high" || !isProductCategory(parsed.category)) {
-      res.json({ status: "uncertain" } satisfies IdentifyResponse); return;
-    }
     const known = (parsed.productId ? lookupCatalogById(parsed.productId) : null) ?? (parsed.name ? lookupCatalogByName(parsed.name) : null);
     const knownCategory = known ? catalogModeToProductCategory(known.mode) : null;
-    // The deterministic server catalog outranks the model's category. A known
-    // mixer must not be rejected just because vision mislabeled it as spirits
-    // or THC; unknown products still use the model's fail-closed category.
-    const effectiveCategory = knownCategory ?? parsed.category;
+
+    // Resolve known catalog identity before trusting the model's category or
+    // confidence. Unknown products continue through the same fail-closed AI
+    // classification gates below.
+    if (!known) {
+      if (parsed.category === "non_beverage") {
+        res.json({ status: "not_a_drink" } satisfies IdentifyResponse);
+        return;
+      }
+      if (parsed.category === "uncertain" || parsed.confidence !== "high" || !isProductCategory(parsed.category)) {
+        res.json({ status: "uncertain" } satisfies IdentifyResponse);
+        return;
+      }
+    }
+
+    const effectiveCategory = knownCategory ?? (
+      isProductCategory(parsed.category) ? parsed.category : null
+    );
+    if (!effectiveCategory) {
+      res.json({ status: "uncertain" } satisfies IdentifyResponse);
+      return;
+    }
     if (!isCategoryCompatible(mode, effectiveCategory)) {
       res.json({
         status: "category_mismatch",
@@ -122,7 +136,7 @@ For non_beverage, uncertain, low confidence, incompatible categories, or mixer c
       res.json({ status: "matched", productId: parsed.productId } satisfies IdentifyResponse); return;
     }
     const recipes = parsed.recipes.filter(isRecipe);
-    const productCategory = knownCategory ?? parsed.category;
+    const productCategory = effectiveCategory;
     if (parsed.name && (productCategory === "mixer" || recipes.length >= 3)) {
       res.json({
         status: "ai",

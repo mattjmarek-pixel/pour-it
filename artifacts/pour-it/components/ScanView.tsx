@@ -27,7 +27,10 @@ import {
 } from '@workspace/category-policy';
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { PRODUCTS, findProductByBarcode } from '@/src/data/recipes';
-import type { SafetyProductCategory } from '@/src/services/mixerFlow';
+import {
+  buildFullCatalogHints,
+  type SafetyProductCategory,
+} from '@/src/services/mixerFlow';
 import {
   IDENTIFY_TIMEOUT_MS,
   ScanTimeoutError,
@@ -227,12 +230,9 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
         return;
       }
 
-      const hints = PRODUCTS[mode].map((p) => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-      }));
+      // Identification is always checked against every known product. The
+      // active mode controls compatibility and recipes, never catalog safety.
+      const hints = buildFullCatalogHints(PRODUCTS);
 
       const controller = new AbortController();
       const res = await withScanTimeout(

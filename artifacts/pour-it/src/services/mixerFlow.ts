@@ -1,4 +1,4 @@
-import type { AppMode } from '@/src/data/recipes';
+import type { AppMode, Product } from '@/src/data/recipes';
 import type { ProductCategory } from '@workspace/category-policy';
 
 export type SafetyProductCategory = Exclude<ProductCategory, 'mixer'>;
@@ -39,4 +39,24 @@ export function isNoStrongPairingResponse(
     candidate.status === 'no_strong_pairing' &&
     typeof candidate.message === 'string'
   );
+}
+
+export interface IdentifyProductHint {
+  id: string;
+  name: string;
+  brand: string;
+  category: string;
+}
+
+export function buildFullCatalogHints(
+  catalog: Record<AppMode, Product[]>
+): IdentifyProductHint[] {
+  return (Object.values(catalog) as Product[][])
+    .flat()
+    .map(({ id, name, brand, category }) => ({
+      id,
+      name,
+      brand,
+      category,
+    }));
 }

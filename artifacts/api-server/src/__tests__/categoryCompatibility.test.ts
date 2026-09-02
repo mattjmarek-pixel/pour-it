@@ -160,6 +160,67 @@ describe("catalog precedence during identification", () => {
       productId: "fevertree",
     });
   });
+
+  it("blocks a known THC product in Spirits even when vision calls it a mixer", async () => {
+    create.mockResolvedValueOnce({
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          category: "mixer",
+          confidence: "high",
+          productId: "wynk",
+          name: "Wynk Seltzer",
+          brand: "Wynk",
+          recipes: [],
+        }),
+      }],
+    });
+
+    const response = await request(app).post("/api/identify-bottle").send({
+      imageBase64: "aGVsbG8=",
+      mode: "spirits",
+      products: [
+        { id: "svedka", name: "Svedka Vodka", brand: "Svedka", category: "Vodka" },
+        { id: "wynk", name: "Wynk Seltzer", brand: "Wynk", category: "Seltzers" },
+        { id: "fevertree", name: "Fever-Tree Mixers", brand: "Fever-Tree", category: "Mixers" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: "category_mismatch",
+      detectedCategory: "thc",
+      label: "Wynk Seltzer",
+    });
+  });
+
+  it("uses a known catalog identity before a low-confidence AI category", async () => {
+    create.mockResolvedValueOnce({
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          category: "uncertain",
+          confidence: "low",
+          productId: "wynk",
+          name: "Wynk Seltzer",
+          brand: "Wynk",
+          recipes: [],
+        }),
+      }],
+    });
+
+    const response = await request(app).post("/api/identify-bottle").send({
+      imageBase64: "aGVsbG8=",
+      mode: "spirits",
+      products: [
+        { id: "wynk", name: "Wynk Seltzer", brand: "Wynk", category: "Seltzers" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.detectedCategory).toBe("thc");
+    expect(response.body.status).toBe("category_mismatch");
+  });
 });
 
 describe("THC AI customization enforcement", () => {

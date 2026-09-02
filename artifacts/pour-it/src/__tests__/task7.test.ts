@@ -2,9 +2,11 @@ import { isCategoryCompatible, catalogModeToProductCategory } from '@workspace/c
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCachedAIRecipe, setCachedAIRecipe } from '../services/recipeCache';
 import {
+  buildFullCatalogHints,
   getCategoryMismatchMessage,
   isNoStrongPairingResponse,
 } from '../services/mixerFlow';
+import { PRODUCTS } from '../data/recipes';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -30,6 +32,20 @@ describe('Mixer Compatibility & Safety Logic', () => {
     expect(isCategoryCompatible('mocktails', 'spirits')).toBe(false);
     expect(isCategoryCompatible('spirits', 'thc')).toBe(false);
     expect(isCategoryCompatible('mocktails', 'thc')).toBe(false);
+  });
+
+  it('sends identification hints from every product mode', () => {
+    const hints = buildFullCatalogHints(PRODUCTS);
+    const ids = new Set(hints.map(({ id }) => id));
+
+    expect(ids).toContain('svedka');
+    expect(ids).toContain('wynk');
+    expect(ids).toContain('fevertree');
+    expect(hints).toHaveLength(
+      PRODUCTS.spirits.length +
+        PRODUCTS.thc.length +
+        PRODUCTS.mocktails.length
+    );
   });
 });
 
