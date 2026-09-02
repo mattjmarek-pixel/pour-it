@@ -1,0 +1,35 @@
+I have two related pieces of work. Please investigate first, then build both, keeping them as clean, separate, well-commented pieces of code.
+
+=====================================
+PART 1: INVESTIGATE (DO NOT CHANGE ANYTHING YET)
+=====================================
+
+1. Does the app currently have any user account, login, or authentication system anywhere (mobile or server)? Show me what you find, or confirm there is none.
+2. Is there any existing anonymous per-device identifier used anywhere in the app (e.g. an install ID, device ID)?
+3. Show me the existing AsyncStorage pattern used for the 7-day AI recipe cache, so any new local storage follows the same convention and TTL style.
+4. Find the "Select a Spirit Pairing" screen (the one that shows a list of known spirit brands when pairing a scanned mixer). Show me the file and how it currently only pulls from the known-product catalog.
+5. Find the existing spirit scan/identify flow used elsewhere in the app (camera capture -> identify -> result), so it can be reused rather than rebuilt.
+
+Report back before building anything.
+
+=====================================
+PART 2: BUILD
+=====================================
+
+Part A — Add "Scan your bottle instead" to the pairing screen
+1. On the "Select a Spirit Pairing" screen, add a clearly visible button/option: "Can't find it? Scan your bottle instead."
+2. This should open the EXACT SAME scan/identify flow already used elsewhere in the app (do not build a new camera or identification flow) — just route the result back into the pairing selection once a spirit is identified.
+3. If the scanned spirit is a known catalog product, treat it the same as if it had been picked from the list. If it's not in the catalog, it should still work — use the AI-identified product for the pairing, the same way unrecognized products are handled elsewhere in the app.
+4. This must not touch or weaken the cross-category safety checks already in place. Show me that the safety gate still runs on this scan just like any other scan.
+
+Part B — Local "My Bar" list (no accounts, no login, device-only)
+1. Whenever ANY scan in the app successfully identifies a product (main scan screen, or the new pairing-screen scan), save a lightweight record to local device storage using the same AsyncStorage convention as the AI recipe cache: product name, brand, category, mode, and date last scanned.
+2. If the same product is scanned again, update its "last scanned" date rather than creating a duplicate entry.
+3. Add a simple "My Bar" screen where the user can see everything they've scanned, newest first. Keep the UI simple — a clean list, nothing fancy. No editing or manual add needed for this version.
+4. This is fully local and anonymous — no account, no login, no server sync. Add a comment noting this can migrate to account-based sync later if accounts are ever added.
+5. Keep this as its own isolated piece of code — do not merge it into the safety gates, the quality gate, or the scan-limit system.
+
+After building, show me:
+- Every file created or changed, with code
+- Confirmation (with a grep) that the safety gate logic in identify.ts was not modified
+- A plain-language walkthrough of what happens when: (a) someone taps "scan instead" on the pairing screen and it's a known spirit, (b) same but it's an unknown spirit, (c) someone opens the My Bar screen for the first time with nothing scanned yet, (d) someone scans the same bottle twice
