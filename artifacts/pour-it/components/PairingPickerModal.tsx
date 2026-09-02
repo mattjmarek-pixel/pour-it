@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Modal,
   Platform,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ScanView } from '@/components/ScanView';
 import type { AppMode, Product } from '@/src/data/recipes';
 import { PRODUCTS } from '@/src/data/recipes';
 import { safeImpact } from '@/utils/haptics';
@@ -34,6 +35,14 @@ export function PairingPickerModal({
 }: PairingPickerModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setScanning(false);
+      setQuery('');
+    }
+  }, [visible]);
 
   const availableProducts = PRODUCTS[mode];
 
@@ -47,6 +56,23 @@ export function PairingPickerModal({
         p.spiritType.toLowerCase().includes(q)
     );
   }, [query, availableProducts]);
+
+  if (scanning) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setScanning(false)}>
+        <ScanView
+          mode="spirits"
+          accentColor={accentColor}
+          onProductFound={(product) => {
+            setScanning(false);
+            onSelect(product);
+          }}
+          onBrowseManually={() => setScanning(false)}
+          onClose={() => setScanning(false)}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -70,6 +96,21 @@ export function PairingPickerModal({
             testID="pairing-search-input"
           />
         </View>
+
+        {mode === 'spirits' && (
+          <Pressable
+            style={[styles.scanInsteadBtn, { borderColor: `${accentColor}66` }]}
+            onPress={() => setScanning(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Can't find it? Scan your bottle instead."
+            testID="pairing-scan-instead-btn"
+          >
+            <Feather name="camera" size={18} color={accentColor} />
+            <Text style={[styles.scanInsteadText, { color: accentColor }]}>
+              Can't find it? Scan your bottle instead.
+            </Text>
+          </Pressable>
+        )}
 
         <FlatList
           data={results}
@@ -153,6 +194,22 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 12,
     paddingBottom: 24,
+  },
+  scanInsteadBtn: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+    marginHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  scanInsteadText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 14,
   },
   item: {
     flexDirection: 'row',

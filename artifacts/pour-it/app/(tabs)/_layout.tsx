@@ -85,6 +85,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="my-bar"
+        options={{
+          title: "My Bar",
+          tabBarActiveTintColor: MODE_COLORS.spirits,
+          tabBarIcon: ({ color, size }) =>
+            isIOS ? (
+              <SymbolView name="cabinet" tintColor={color} size={size} />
+            ) : (
+              <MaterialCommunityIcons name="bottle-wine-outline" size={size} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
         name="saved"
         options={{
           title: "Saved",

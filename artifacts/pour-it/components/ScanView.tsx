@@ -35,6 +35,7 @@ import {
   createScanDeadline,
   ScanTimeoutError,
 } from '@/src/services/scanTimeout';
+import { upsertMyBarProduct } from '@/src/services/myBarStorage';
 import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
@@ -42,6 +43,7 @@ interface ScanViewProps {
   accentColor: string;
   onProductFound: (product: Product) => void;
   onBrowseManually: () => void;
+  onClose?: () => void;
 }
 
 const MODE_EMOJI: Record<AppMode, string> = {
@@ -91,7 +93,13 @@ const MODE_LABELS: Record<AppMode, string> = {
   mocktails: 'Mocktails',
 };
 
-export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }: ScanViewProps) {
+export function ScanView({
+  mode,
+  accentColor,
+  onProductFound,
+  onBrowseManually,
+  onClose,
+}: ScanViewProps) {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
@@ -105,6 +113,13 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+
+  const completeSuccessfulScan = (product: Product) => {
+    // My Bar observes successful scan output only. It does not participate in
+    // identification, category safety, or recipe quality decisions.
+    void upsertMyBarProduct(product, mode);
+    onProductFound(product);
+  };
 
   const cornerOpacity = useRef(new Animated.Value(0.6)).current;
 
@@ -160,7 +175,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       const pCategory = catalogModeToProductCategory(found.mode);
       if (pCategory && isCategoryCompatible(mode, pCategory)) {
         safeNotification(Haptics.NotificationFeedbackType.Success);
-        onProductFound({ ...found.product, productCategory: pCategory });
+        completeSuccessfulScan({ ...found.product, productCategory: pCategory });
         return;
       }
       // SAFETY: product belongs to a different category. Do NOT render the
@@ -294,7 +309,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
         if (matchedEntry) {
           const pCategory = catalogModeToProductCategory(matchedEntry.catalogMode);
           safeNotification(Haptics.NotificationFeedbackType.Success);
-          onProductFound({
+          completeSuccessfulScan({
             ...matchedEntry.product,
             productCategory: pCategory || undefined,
           });
@@ -307,7 +322,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       if (data.status === 'ai') {
         const aiProduct = buildAIProduct(data.product, data.verificationToken);
         safeNotification(Haptics.NotificationFeedbackType.Success);
-        onProductFound(aiProduct);
+        completeSuccessfulScan(aiProduct);
         return;
       }
 
@@ -389,6 +404,16 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
         ]}
       >
         <View style={styles.topBarInline}>
+          {onClose && (
+            <Pressable
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close scanner"
+            >
+              <Feather name="x" size={22} color="#FFFFFF" />
+            </Pressable>
+          )}
           <Text style={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
         </View>
         <View style={styles.webNoticeWrap}>
@@ -494,6 +519,16 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
+        {onClose && (
+          <Pressable
+            onPress={onClose}
+            style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close scanner"
+          >
+            <Feather name="x" size={22} color="#FFFFFF" />
+          </Pressable>
+        )}
         <Text style={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
         <Pressable
           onPress={() => setTorch((t) => !t)}
@@ -588,6 +623,14 @@ const styles = StyleSheet.create({
   center: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  closeBtn: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   overlay: {
     position: 'absolute',
