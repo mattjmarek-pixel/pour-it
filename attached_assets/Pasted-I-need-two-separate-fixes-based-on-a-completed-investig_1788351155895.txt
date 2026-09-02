@@ -1,0 +1,25 @@
+I need two separate fixes based on a completed investigation. Please treat these as two separate, independent changes — do not mix them together in your explanation or your commits.
+
+FIX 1: Add a timeout to the scan/identify request
+
+In the mobile app's scan screen (where takePictureAsync() and the fetch() call to identify the product happen), there is currently no timeout. If either the camera capture or the network request stalls, the loading state never resolves and the user is stuck on a spinner forever.
+
+Please:
+1. Add a reasonable timeout (10-15 seconds is fine) to the identify request using an AbortController or fetch timeout pattern.
+2. If the timeout is hit, reset the scan state (the same way it resets when a user dismisses a modal) and show the user a clear "Something went wrong, please try again" message — do NOT leave them on an infinite spinner.
+3. Show me the exact before/after code for this change.
+
+FIX 2: Close the cross-category safety gap
+
+Currently, when a user scans a product, the mobile app only sends the AI vision model a list of KNOWN products from the CURRENT mode (e.g. only Spirits products when in Spirits mode). This means if someone scans a THC product while in Spirits mode, the app has no THC catalog to check it against — it only has the AI's raw guess to go on. If the AI guesses "mixer" instead of "thc" (which can happen inconsistently between scans of the same item), the cross-category safety block gets skipped entirely, and the product proceeds to recipe generation.
+
+This is a safety-critical gap: known cross-category products (e.g. THC items) MUST be caught regardless of which mode the app is currently in, not just when the AI vision happens to guess correctly.
+
+Please fix this by:
+1. Changing the mobile app so the identify request always checks the scanned product against the FULL product catalog (all modes: Spirits, THC, and Mocktails/mixer), not just the current mode's catalog. The current-mode restriction should only affect what recipes get generated — never what safety category-check the product gets checked against.
+2. On the server side (identify.ts), make sure the catalog lookup (lookupCatalogById / lookupCatalogByName) is always checked FIRST, before any AI-vision-based category guess is trusted, for any product that matches a known catalog entry — regardless of what mode hints were sent.
+3. Do NOT weaken the AI-vision fallback for genuinely unknown products (rare items not in the catalog) — those should still work as before. This fix is specifically about making sure that KNOWN cross-category products can never slip through due to which mode's hints were sent.
+4. Show me the exact before/after code for every file you touch.
+5. After the fix, walk me through, in plain language, exactly why this closes the gap — specifically explain why a THC product now gets caught in Spirits mode even if the AI vision model initially guesses "mixer."
+
+Do not touch the quality-gate ("no strong pairing") logic at all — that system is working correctly and is unrelated to this bug.
