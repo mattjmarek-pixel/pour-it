@@ -57,10 +57,9 @@ export function upsertMyBarProduct(
   mode: AppMode,
   scannedAt = Date.now()
 ): Promise<void> {
-  const identity = getMyBarIdentity(product);
-
   writeQueue = writeQueue.then(async () => {
     try {
+      const identity = getMyBarIdentity(product);
       const existing = await getMyBarItems();
       const nextItem: MyBarItem = {
         identity,

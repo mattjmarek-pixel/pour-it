@@ -117,7 +117,11 @@ export function ScanView({
   const completeSuccessfulScan = (product: Product) => {
     // My Bar observes successful scan output only. It does not participate in
     // identification, category safety, or recipe quality decisions.
-    void upsertMyBarProduct(product, mode);
+    void Promise.resolve()
+      .then(() => upsertMyBarProduct(product, mode))
+      .catch(() => {
+        // My Bar is best-effort. Its failures must never enter the scan flow.
+      });
     onProductFound(product);
   };
 

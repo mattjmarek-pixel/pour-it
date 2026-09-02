@@ -1,4 +1,7 @@
-export const IDENTIFY_TIMEOUT_MS = 12_000;
+// Camera capture consumes part of this same end-to-end budget. Production
+// identify requests have taken ~11 seconds on their own, so 12 seconds caused
+// valid responses to be aborted before they could reach the client.
+export const IDENTIFY_TIMEOUT_MS = 20_000;
 
 export class ScanTimeoutError extends Error {
   constructor() {
