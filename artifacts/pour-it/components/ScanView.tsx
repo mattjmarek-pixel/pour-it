@@ -28,6 +28,11 @@ import {
 import type { AppMode, Product, Recipe } from '@/src/data/recipes';
 import { PRODUCTS, findProductByBarcode } from '@/src/data/recipes';
 import type { SafetyProductCategory } from '@/src/services/mixerFlow';
+import {
+  IDENTIFY_TIMEOUT_MS,
+  ScanTimeoutError,
+  withScanTimeout,
+} from '@/src/services/scanTimeout';
 import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
@@ -181,6 +186,18 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
     resetAfter(ms);
   };
 
+  const showRetryError = () => {
+    setToastMessage('Something went wrong, please try again');
+    setToastVisible(true);
+    safeNotification(Haptics.NotificationFeedbackType.Error);
+    scannedRef.current = false;
+    setScanned(false);
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = setTimeout(() => {
+      setToastVisible(false);
+    }, 2800);
+  };
+
   const identifyWithVision = async () => {
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
     if (!domain || !cameraRef.current) {
@@ -198,11 +215,13 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
 
     setIdentifying(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.5,
-        skipProcessing: true,
-      });
+      const photo = await withScanTimeout(
+        cameraRef.current.takePictureAsync({
+          base64: true,
+          quality: 0.5,
+          skipProcessing: true,
+        })
+      );
       if (!photo?.base64) {
         showToast('Product not found — try browsing manually', 2400);
         return;
@@ -215,18 +234,24 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
         category: p.category,
       }));
 
-      const res = await fetch(`https://${domain}/api/identify-bottle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: photo.base64,
-          products: hints,
-          mode,
-          // Server-side THC geo-enforcement: THC identification is rejected
-          // without a valid server-signed location token.
-          ...(mode === 'thc' ? { locationToken } : {}),
+      const controller = new AbortController();
+      const res = await withScanTimeout(
+        fetch(`https://${domain}/api/identify-bottle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: photo.base64,
+            products: hints,
+            mode,
+            // Server-side THC geo-enforcement: THC identification is rejected
+            // without a valid server-signed location token.
+            ...(mode === 'thc' ? { locationToken } : {}),
+          }),
+          signal: controller.signal as AbortSignal,
         }),
-      });
+        () => controller.abort(),
+        IDENTIFY_TIMEOUT_MS
+      );
       if (!res.ok) {
         showToast('Product not found — try browsing manually', 2400);
         return;
@@ -288,8 +313,15 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       }
 
       showToast('Product not found — try browsing manually', 2400);
-    } catch {
-      showToast('Product not found — try browsing manually', 2400);
+    } catch (error) {
+      if (
+        error instanceof ScanTimeoutError ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        showRetryError();
+      } else {
+        showToast('Product not found — try browsing manually', 2400);
+      }
     } finally {
       setIdentifying(false);
     }
