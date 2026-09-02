@@ -201,6 +201,8 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
   const [pairingProduct, setPairingProduct] = useState<Product | null>(null);
   const [isPairingPickerOpen, setIsPairingPickerOpen] = useState(false);
   const [noStrongPairingMsg, setNoStrongPairingMsg] = useState<string | null>(null);
+  const [pairingGenerationError, setPairingGenerationError] = useState<string | null>(null);
+  const [pairingGenerationAttempt, setPairingGenerationAttempt] = useState(0);
   const { locationToken } = useThcGate();
 
   useEffect(() => {
@@ -209,6 +211,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     setAiLoading(false);
     setAiError(null);
     setNoStrongPairingMsg(null);
+    setPairingGenerationError(null);
 
     const hasStaticAI = product.recipes.some((r) => r.tier === 'ai');
     // Mixer scans in Spirits/THC run the quality-gated generator even without
@@ -219,6 +222,12 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     if (hasStaticAI && !isMixer) return;
 
     (async () => {
+      const showPairingGenerationError = () => {
+        if (!cancelled && pairingProduct) {
+          setPairingGenerationError("Couldn't generate a recipe for this pairing — try again");
+        }
+      };
+
       const cached = await getCachedAIRecipe(product.id, mode, pairingProduct?.id);
       if (cancelled) return;
       if (cached) {
@@ -241,7 +250,10 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
       setAiLoading(true);
       try {
         const domain = process.env.EXPO_PUBLIC_DOMAIN;
-        if (!domain) return;
+        if (!domain) {
+          showPairingGenerationError();
+          return;
+        }
         const res = await fetch(`https://${domain}/api/recipes/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -263,6 +275,10 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         });
 
         if (!res.ok) {
+          if (pairingProduct) {
+            showPairingGenerationError();
+            return;
+          }
           if (res.status === 409) {
             try {
               const err = (await res.json()) as { error?: string };
@@ -303,6 +319,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           !Array.isArray(recipeData.steps) ||
           !Array.isArray(recipeData.tags)
         ) {
+          showPairingGenerationError();
           return;
         }
 
@@ -319,7 +336,8 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
         setAiRecipe(generated);
         void setCachedAIRecipe(product.id, mode, generated, pairingProduct?.id);
       } catch {
-        // Silent failure — only show static recipes
+        showPairingGenerationError();
+        // Unpaired generation remains optional; static recipes are its fallback.
       } finally {
         if (!cancelled) setAiLoading(false);
       }
@@ -328,7 +346,7 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
     return () => {
       cancelled = true;
     };
-  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes, locationToken, product.aiGenerated, product.verificationToken, product.productCategory, pairingProduct]);
+  }, [product.id, product.name, product.spiritType, product.flavorNotes, mode, product.recipes, locationToken, product.aiGenerated, product.verificationToken, product.productCategory, pairingProduct, pairingGenerationAttempt]);
 
   const combined: Recipe[] = aiRecipe ? [...product.recipes, aiRecipe] : product.recipes;
   const sortedRecipes = [...combined].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
@@ -434,6 +452,28 @@ export function RecipeList({ mode, accentColor, product, onBack, onCustomizeAI }
           {noStrongPairingMsg && (
             <View style={styles.noStrongPairingWrap}>
               <Text style={styles.noStrongPairingText}>{noStrongPairingMsg}</Text>
+            </View>
+          )}
+
+          {pairingGenerationError && (
+            <View style={styles.pairingErrorWrap}>
+              <View style={styles.pairingErrorHeader}>
+                <Feather name="alert-circle" size={18} color="#F87171" />
+                <Text style={styles.pairingErrorText}>{pairingGenerationError}</Text>
+              </View>
+              <Pressable
+                style={[styles.pairingRetryBtn, { borderColor: `${accentColor}80` }]}
+                onPress={() => {
+                  setPairingGenerationError(null);
+                  setPairingGenerationAttempt((attempt) => attempt + 1);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Retry recipe generation for this pairing"
+                testID="pairing-generation-retry"
+              >
+                <Feather name="refresh-cw" size={14} color={accentColor} />
+                <Text style={[styles.pairingRetryText, { color: accentColor }]}>Try again</Text>
+              </Pressable>
             </View>
           )}
 
@@ -760,5 +800,41 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  pairingErrorWrap: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(248,113,113,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.35)',
+    gap: 12,
+  },
+  pairingErrorHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pairingErrorText: {
+    color: '#FCA5A5',
+    flex: 1,
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  pairingRetryBtn: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 40,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  pairingRetryText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
   },
 });
