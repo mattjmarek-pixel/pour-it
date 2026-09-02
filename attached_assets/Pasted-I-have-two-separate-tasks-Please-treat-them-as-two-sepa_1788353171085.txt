@@ -1,0 +1,45 @@
+I have two separate tasks. Please treat them as two separate, independent pieces of work — investigate first and report back, THEN move to the build. Do not skip ahead or combine them.
+
+=====================================
+PART 1: INVESTIGATE — Recipe mix per product (DO NOT CHANGE ANYTHING YET)
+=====================================
+
+I want to understand how many Canonical recipes, Craft recipes, and AI-generated recipes currently show up for a typical scanned product, across all three modes (Spirits, THC, Mocktails).
+
+Please investigate and report back:
+
+1. Find the code that determines how many Canonical recipes, Craft recipes, and AI recipes are shown for a given scanned product (likely in or near the recipe list/tier logic, possibly RecipeList.tsx or a related data/catalog file).
+
+2. For a sample of a few real products already in the catalog (pick 2-3 per mode if possible), tell me:
+   - How many Canonical recipes exist for that product
+   - How many Craft recipes exist for that product
+   - How many AI recipes get generated/shown (is there a fixed number, or does it vary?)
+
+3. Tell me whether there's currently any limit on how many AI recipes can be generated/shown per product, or whether it's unlimited/open-ended.
+
+4. Tell me whether the Canonical/Craft recipe catalog is fairly full (lots of products have several proven recipes) or thin (many products may only have 1 or 0 Canonical/Craft recipes, meaning AI recipes end up being most of what a user sees).
+
+Do NOT change any code in this part. Just show me what you find with file names and relevant code/data, so I can decide if the balance needs adjusting.
+
+=====================================
+PART 2: BUILD — Free AI scan limit system
+=====================================
+
+Now implement a free scan limit system for AI vision scanning, with these exact rules. Build this as its own distinct logic path, separate from the existing category safety gates and the quality/pairing gate — do not merge this logic into either of those systems.
+
+Rules:
+1. Every user gets 3 free AI vision scans total, one-time (not recurring, not monthly, not per-mode — 3 total across their whole time using the app before subscribing).
+2. This limit applies the same way in all three modes (Spirits, THC, Mocktails) — no mode is exempt.
+3. Barcode scanning is NOT affected by this limit at all — it stays free and unlimited, always. Do not touch barcode scan logic.
+4. CRITICAL: A scan should only count against the 3-scan limit if the AI successfully identifies the product. If the AI scan fails, times out, returns "uncertain," or the photo is too blurry/unreadable to get a result, that attempt must NOT be deducted from the user's free scans. Only count a successful, usable identification.
+5. Once a user has used all 3 free scans, the next AI vision scan attempt should show a clear paywall/upgrade screen instead of attempting the scan.
+6. Build a bypass mechanism for App Store / Google Play reviewer accounts so reviewers can test unlimited AI scans during the app review process without hitting the paywall. Use a simple, clearly-commented flag or server-side allowlist for this — show me exactly how a reviewer account would be marked and how it's checked.
+7. Track the scan count in a way that survives the user deleting and reinstalling the app if reasonably easy to implement (e.g. tied to a device identifier or account, not just local app storage) — but if this adds significant complexity, tell me the trade-off and just use local storage for now with a comment noting it's a known limitation to revisit post-launch.
+
+After building, show me:
+- Every file you changed or created, with before/after code
+- Where exactly the "does this count as a successful scan" check happens
+- Where exactly the reviewer bypass check happens
+- A plain-language walkthrough of what happens step by step when: (a) a user has scans remaining and succeeds, (b) a user has scans remaining but the AI fails to identify anything, (c) a user has 0 scans left and tries to scan, (d) a reviewer account tries to scan with 0 regular scans left
+
+Then run a grep to confirm this new scan-limit logic is NOT touching or modifying the existing category safety gate files (identify.ts gates) or the quality/pairing gate logic (no_strong_pairing path) — show me that grep output so I can confirm these systems remain fully separate.
