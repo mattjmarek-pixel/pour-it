@@ -1,4 +1,5 @@
 import {
+  createScanDeadline,
   ScanTimeoutError,
   withScanTimeout,
 } from '../services/scanTimeout';
@@ -30,5 +31,30 @@ describe('scan identification timeout', () => {
       withScanTimeout(Promise.resolve('identified'), onTimeout, 25)
     ).resolves.toBe('identified');
     expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it('uses one deadline so capture time consumes the fetch budget', async () => {
+    jest.useFakeTimers();
+    const deadline = createScanDeadline(100);
+    const capture = deadline.run(
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve('photo'), 60);
+      })
+    );
+
+    jest.advanceTimersByTime(60);
+    await expect(capture).resolves.toBe('photo');
+
+    const abortFetch = jest.fn();
+    const fetchResult = deadline.run(
+      new Promise<never>(() => {}),
+      abortFetch
+    );
+    jest.advanceTimersByTime(39);
+    expect(abortFetch).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+    await expect(fetchResult).rejects.toBeInstanceOf(ScanTimeoutError);
+    expect(abortFetch).toHaveBeenCalledTimes(1);
   });
 });

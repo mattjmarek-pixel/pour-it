@@ -32,9 +32,8 @@ import {
   type SafetyProductCategory,
 } from '@/src/services/mixerFlow';
 import {
-  IDENTIFY_TIMEOUT_MS,
+  createScanDeadline,
   ScanTimeoutError,
-  withScanTimeout,
 } from '@/src/services/scanTimeout';
 import { safeNotification } from '@/utils/haptics';
 
@@ -217,8 +216,9 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
     }
 
     setIdentifying(true);
+    const deadline = createScanDeadline();
     try {
-      const photo = await withScanTimeout(
+      const photo = await deadline.run(
         cameraRef.current.takePictureAsync({
           base64: true,
           quality: 0.5,
@@ -235,7 +235,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
       const hints = buildFullCatalogHints(PRODUCTS);
 
       const controller = new AbortController();
-      const res = await withScanTimeout(
+      const res = await deadline.run(
         fetch(`https://${domain}/api/identify-bottle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -249,8 +249,7 @@ export function ScanView({ mode, accentColor, onProductFound, onBrowseManually }
           }),
           signal: controller.signal as AbortSignal,
         }),
-        () => controller.abort(),
-        IDENTIFY_TIMEOUT_MS
+        () => controller.abort()
       );
       if (!res.ok) {
         showToast('Product not found — try browsing manually', 2400);
