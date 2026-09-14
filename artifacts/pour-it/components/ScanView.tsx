@@ -476,7 +476,7 @@ export function ScanView({
     <View style={styles.root}>
       <CameraView
         ref={cameraRef}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         facing="back"
         active={isFocused}
         enableTorch={torch}
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   identifyingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.45)',
