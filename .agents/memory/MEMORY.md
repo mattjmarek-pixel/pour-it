@@ -1,4 +1,4 @@
 - [Cross-category safety enforcement](cross-category-safety.md) — server-side catalog outranks client and vision model; blocking modal, no bypass; keep server catalog in lockstep with mobile data.
 - [THC geo-gate](thc-geo-gate.md) — fail-closed, session-scoped, client-side only; legal-state list is data the user must keep current; expo-location reverse geocoding doesn't work on web.
-- [Jest + pnpm dual React](jest-pnpm-dual-react.md) — null useState dispatcher in tests means two symlinked React copies; pin `^react$` in moduleNameMapper to the hoisted root copy.
+- [Jest + pnpm dual React](jest-pnpm-dual-react.md) — isolated linking avoids duplicate native modules; keep Jest on app-local React; stop Metro before installing dependencies.
 - [Vision scan deadline](vision-scan-deadline.md) — use an end-to-end budget that covers camera capture plus observed ~11s identify latency; too-tight shared deadlines abort valid responses.

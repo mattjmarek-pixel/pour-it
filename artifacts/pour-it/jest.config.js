@@ -14,8 +14,9 @@ module.exports = {
     // ts-jest transforms it (node_modules is not transformed by default).
     '^@workspace/thc-legal-states$':
       '<rootDir>/../../lib/thc-legal-states/src/index.ts',
-    // Use the single hoisted SDK 55-compatible React copy for all tests.
-    '^react$': '<rootDir>/../../node_modules/react',
-    '^react/(.*)$': '<rootDir>/../../node_modules/react/$1',
+    // Use the app-local React copy for all tests. The isolated pnpm linker
+    // gives the app and react-test-renderer one physical React installation.
+    '^react$': '<rootDir>/node_modules/react',
+    '^react/(.*)$': '<rootDir>/node_modules/react/$1',
   },
 };
