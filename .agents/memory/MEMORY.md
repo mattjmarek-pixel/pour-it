@@ -2,3 +2,4 @@
 - [THC geo-gate](thc-geo-gate.md) — fail-closed, session-scoped, client-side only; legal-state list is data the user must keep current; expo-location reverse geocoding doesn't work on web.
 - [Jest + pnpm dual React](jest-pnpm-dual-react.md) — isolated linking avoids duplicate native modules; keep Jest on app-local React; stop Metro before installing dependencies.
 - [Vision scan deadline](vision-scan-deadline.md) — use an end-to-end budget that covers camera capture plus observed ~11s identify latency; too-tight shared deadlines abort valid responses.
+- [Local vision allowance](vision-allowance.md) — per-install quota, barcode AI fallback included; fail closed on storage errors; reviewer bypass never bypasses safety.

@@ -10,24 +10,56 @@ export class ScanTimeoutError extends Error {
   }
 }
 
+export class ScanCancelledError extends Error {
+  constructor() {
+    super('Scan identification cancelled');
+    this.name = 'ScanCancelledError';
+  }
+}
+
 export function withScanTimeout<T>(
   operation: Promise<T>,
   onTimeout?: () => void,
-  timeoutMs = IDENTIFY_TIMEOUT_MS
+  timeoutMs = IDENTIFY_TIMEOUT_MS,
+  cancelSignal?: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      cancelSignal?.removeEventListener('abort', onCancel);
+    };
+    const onCancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new ScanCancelledError());
+    };
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cancelSignal?.removeEventListener('abort', onCancel);
       onTimeout?.();
       reject(new ScanTimeoutError());
     }, timeoutMs);
 
+    if (cancelSignal?.aborted) {
+      onCancel();
+      return;
+    }
+    cancelSignal?.addEventListener('abort', onCancel, { once: true });
+
     operation.then(
       (value) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve(value);
       },
       (error) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(error);
       }
     );
@@ -36,17 +68,27 @@ export function withScanTimeout<T>(
 
 export interface ScanDeadline {
   run<T>(operation: Promise<T>, onTimeout?: () => void): Promise<T>;
+  cancel(): void;
 }
 
 export function createScanDeadline(
   timeoutMs = IDENTIFY_TIMEOUT_MS
 ): ScanDeadline {
   const expiresAt = Date.now() + timeoutMs;
+  const cancellationController = new AbortController();
 
   return {
     run<T>(operation: Promise<T>, onTimeout?: () => void): Promise<T> {
       const remainingMs = Math.max(0, expiresAt - Date.now());
-      return withScanTimeout(operation, onTimeout, remainingMs);
+      return withScanTimeout(
+        operation,
+        onTimeout,
+        remainingMs,
+        cancellationController.signal
+      );
+    },
+    cancel(): void {
+      cancellationController.abort();
     },
   };
 }

@@ -1,5 +1,6 @@
 import {
   createScanDeadline,
+  ScanCancelledError,
   ScanTimeoutError,
   withScanTimeout,
 } from '../services/scanTimeout';
@@ -56,5 +57,16 @@ describe('scan identification timeout', () => {
     jest.advanceTimersByTime(1);
     await expect(fetchResult).rejects.toBeInstanceOf(ScanTimeoutError);
     expect(abortFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a pending deadline without waiting for its timer', async () => {
+    jest.useFakeTimers();
+    const deadline = createScanDeadline(10_000);
+    const pending = deadline.run(new Promise<never>(() => {}));
+
+    deadline.cancel();
+
+    await expect(pending).rejects.toBeInstanceOf(ScanCancelledError);
+    jest.advanceTimersByTime(10_000);
   });
 });

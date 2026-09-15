@@ -17,6 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CrossCategoryWarningModal } from '@/components/CrossCategoryWarningModal';
 import { EmptyState } from '@/components/EmptyState';
+import {
+  AIVisionQuotaModal,
+  type AIVisionQuotaIssue,
+} from '@/components/AIVisionQuotaModal';
 import { ScanToast } from '@/components/ScanToast';
 import { useThcGate } from '@/context/ThcGateContext';
 import {
@@ -33,8 +37,17 @@ import {
 } from '@/src/services/mixerFlow';
 import {
   createScanDeadline,
+  type ScanDeadline,
   ScanTimeoutError,
 } from '@/src/services/scanTimeout';
+import {
+  beginVisionAllowanceCheck,
+  cancelVisionAllowance,
+  commitVisionAllowance,
+  releaseVisionAllowance,
+  resolveVisionAllowance,
+  type VisionAllowanceAttempt,
+} from '@/src/services/scanUsage';
 import { upsertMyBarProduct } from '@/src/services/myBarStorage';
 import { safeNotification } from '@/utils/haptics';
 
@@ -109,12 +122,19 @@ export function ScanView({
   const [toastMessage, setToastMessage] = useState('Product not found — try browsing manually');
   const [identifying, setIdentifying] = useState(false);
   const [mismatch, setMismatch] = useState<CategoryMismatch | null>(null);
+  const [quotaIssue, setQuotaIssue] = useState<AIVisionQuotaIssue | null>(null);
   const { locationToken } = useThcGate();
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannedRef = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+  const visionCheckInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  const activeVisionAttemptRef = useRef<VisionAllowanceAttempt | null>(null);
+  const activeDeadlineRef = useRef<ScanDeadline | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
   const completeSuccessfulScan = (product: Product) => {
+    if (!mountedRef.current) return;
     // My Bar observes successful scan output only. It does not participate in
     // identification, category safety, or recipe quality decisions.
     void Promise.resolve()
@@ -156,6 +176,16 @@ export function ScanView({
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
+      visionCheckInFlightRef.current = false;
+      if (activeVisionAttemptRef.current) {
+        cancelVisionAllowance(activeVisionAttemptRef.current);
+        activeVisionAttemptRef.current = null;
+      }
+      activeDeadlineRef.current?.cancel();
+      activeDeadlineRef.current = null;
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     };
   }, []);
@@ -234,9 +264,40 @@ export function ScanView({
       return;
     }
 
-    setIdentifying(true);
-    const deadline = createScanDeadline();
+    // This synchronous guard runs before any async allowance read so a double
+    // tap cannot start two checks/captures from this ScanView.
+    if (visionCheckInFlightRef.current) return;
+    visionCheckInFlightRef.current = true;
+
+    // The allowance check is intentionally before setIdentifying, the capture
+    // deadline, and takePictureAsync. Unknown storage fails closed without
+    // silently resetting the user to three free scans.
+    const allowanceAttempt = beginVisionAllowanceCheck();
+    activeVisionAttemptRef.current = allowanceAttempt;
+    let allowanceReservation: VisionAllowanceAttempt | null = null;
+    const isAttemptActive = () =>
+      mountedRef.current &&
+      visionCheckInFlightRef.current &&
+      activeVisionAttemptRef.current?.id === allowanceAttempt.id;
+
     try {
+      const allowance = await resolveVisionAllowance(allowanceAttempt);
+      if (!isAttemptActive()) return;
+      if (allowance.status === 'exhausted') {
+        setQuotaIssue('exhausted');
+        return;
+      }
+      if (allowance.status === 'unknown') {
+        setQuotaIssue('unknown');
+        return;
+      }
+      allowanceReservation = allowance.reservation;
+
+      if (!isAttemptActive()) return;
+      setIdentifying(true);
+      const deadline = createScanDeadline();
+      activeDeadlineRef.current = deadline;
+      if (!isAttemptActive()) return;
       const photo = await deadline.run(
         cameraRef.current.takePictureAsync({
           base64: true,
@@ -244,6 +305,7 @@ export function ScanView({
           skipProcessing: true,
         })
       );
+      if (!isAttemptActive()) return;
       if (!photo?.base64) {
         showToast('Product not found — try browsing manually', 2400);
         return;
@@ -254,6 +316,8 @@ export function ScanView({
       const hints = buildFullCatalogHints(PRODUCTS);
 
       const controller = new AbortController();
+      activeControllerRef.current = controller;
+      if (!isAttemptActive()) return;
       const res = await deadline.run(
         fetch(`https://${domain}/api/identify-bottle`, {
           method: 'POST',
@@ -270,12 +334,14 @@ export function ScanView({
         }),
         () => controller.abort()
       );
+      if (!isAttemptActive()) return;
       if (!res.ok) {
         showToast('Product not found — try browsing manually', 2400);
         return;
       }
 
       const data = (await res.json()) as IdentifyResponse;
+      if (!isAttemptActive()) return;
 
       if (data.status === 'not_a_drink') {
         showToast("This doesn't look like a drink — please scan a beverage", 2800);
@@ -312,6 +378,17 @@ export function ScanView({
           .find(({ product }) => product.id === data.productId);
         if (matchedEntry) {
           const pCategory = catalogModeToProductCategory(matchedEntry.catalogMode);
+          if (!isAttemptActive()) return;
+          const commit = await commitVisionAllowance(allowanceReservation);
+          allowanceReservation = null;
+          if (!isAttemptActive()) return;
+          if (commit.status !== 'committed' && commit.status !== 'bypassed') {
+            // A usable product is never delivered unless its allowance commit
+            // succeeded. Persistence failure is recoverable, not a product
+            // identification success.
+            setQuotaIssue('unknown');
+            return;
+          }
           safeNotification(Haptics.NotificationFeedbackType.Success);
           completeSuccessfulScan({
             ...matchedEntry.product,
@@ -325,6 +402,17 @@ export function ScanView({
 
       if (data.status === 'ai') {
         const aiProduct = buildAIProduct(data.product, data.verificationToken);
+        if (!isAttemptActive()) return;
+        const commit = await commitVisionAllowance(allowanceReservation);
+        allowanceReservation = null;
+        if (!isAttemptActive()) return;
+        if (commit.status !== 'committed' && commit.status !== 'bypassed') {
+          // A usable product is never delivered unless its allowance commit
+          // succeeded. Persistence failure is recoverable, not a product
+          // identification success.
+          setQuotaIssue('unknown');
+          return;
+        }
         safeNotification(Haptics.NotificationFeedbackType.Success);
         completeSuccessfulScan(aiProduct);
         return;
@@ -332,6 +420,7 @@ export function ScanView({
 
       showToast('Product not found — try browsing manually', 2400);
     } catch (error) {
+      if (!isAttemptActive()) return;
       if (
         error instanceof ScanTimeoutError ||
         (error instanceof Error && error.name === 'AbortError')
@@ -341,7 +430,19 @@ export function ScanView({
         showToast('Product not found — try browsing manually', 2400);
       }
     } finally {
-      setIdentifying(false);
+      if (allowanceReservation) {
+        // Only successful matched/AI products reach commitVisionAllowance.
+        // Every failure, timeout, mismatch, and unusable result returns the
+        // in-memory permit without changing persisted usage.
+        releaseVisionAllowance(allowanceReservation);
+      }
+      if (activeVisionAttemptRef.current?.id === allowanceAttempt.id) {
+        activeVisionAttemptRef.current = null;
+      }
+      activeDeadlineRef.current = null;
+      activeControllerRef.current = null;
+      if (mountedRef.current) setIdentifying(false);
+      visionCheckInFlightRef.current = false;
     }
   };
 
@@ -393,6 +494,11 @@ export function ScanView({
 
   const handleMismatchCancel = () => {
     setMismatch(null);
+    resetAfter(0);
+  };
+
+  const handleQuotaIssueDismiss = () => {
+    setQuotaIssue(null);
     resetAfter(0);
   };
 
@@ -588,6 +694,15 @@ export function ScanView({
           currentMode={mode}
           productName={mismatch.productName}
           onCancel={handleMismatchCancel}
+        />
+      )}
+
+      {quotaIssue && (
+        <AIVisionQuotaModal
+          visible
+          issue={quotaIssue}
+          accentColor={accentColor}
+          onDismiss={handleQuotaIssueDismiss}
         />
       )}
     </View>

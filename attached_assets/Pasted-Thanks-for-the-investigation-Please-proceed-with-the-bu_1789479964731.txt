@@ -1,0 +1,26 @@
+Thanks for the investigation. Please proceed with the build based on your findings, with these specifics:
+
+1. Create a new isolated service (e.g. src/services/scanUsage.ts) with:
+   - A single versioned AsyncStorage key like "ai_vision_usage:v1"
+   - No mode suffix, no expiration
+   - A validated count and serialized writes, following the myBarStorage.ts pattern
+   - If storage fails to read, treat it as "allowance unknown" and fail closed (block the scan) rather than silently resetting to 3 free scans
+
+2. In ScanView.tsx's identifyWithVision(), check remaining allowance BEFORE setIdentifying(true) and before starting the capture deadline, exactly as you described. If no scans remain (and no reviewer bypass is active), skip capture entirely and show an upgrade/paywall screen instead.
+
+3. Increment the count only in the two success branches you identified (matched and ai), after a usable product is confirmed — not on failures, timeouts, uncertain results, or mismatches.
+
+4. Confirm explicitly: does the barcode-triggered AI fallback path also respect this same limit? It should, since it consumes an AI vision call. Show me where that's enforced.
+
+5. Add a default-off reviewer configuration flag (not an account) that bypasses the limit when enabled, clearly commented as being for App Store/Google Play review builds only.
+
+6. Since RevenueCat isn't wired up yet, the "upgrade screen" shown when scans are exhausted should be a real, clear screen (not a placeholder or broken button) but its actual purchase button can be a visibly disabled/coming-soon state for now — do NOT fake a working purchase flow. Add a clear code comment marking exactly where the real RevenueCat purchase call will need to be wired in later.
+
+7. Keep this fully isolated — no imports between this and My Bar, the safety gates, or the quality gate.
+
+After building, show me:
+- Every file created or changed
+- Where the allowance check happens relative to capture
+- Where the barcode-fallback-to-AI path is covered
+- Where the reviewer bypass flag lives and how it's toggled
+- A plain-language walkthrough of: (a) a user with scans left who succeeds, (b) a user with scans left whose scan fails, (c) a user with 0 scans left, (d) a reviewer build with 0 regular scans left, (e) an unknown barcode triggering the AI fallback when the user has 0 scans left
