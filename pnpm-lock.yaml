@@ -19,7 +19,7 @@ catalogs:
       specifier: ^5.90.21
       version: 5.90.21
     '@types/node':
-      specifier: 25.3.5
+      specifier: ^25.3.3
       version: 25.3.5
     '@types/react':
       specifier: ^19.2.0
@@ -131,8 +131,8 @@ overrides:
   rollup>@rollup/rollup-linux-riscv64-musl: '-'
   rollup>@rollup/rollup-linux-s390x-gnu: '-'
   rollup>@rollup/rollup-linux-x64-musl: '-'
-  rollup>@rollup/rollup-openharmony-arm64: '-'
   rollup>@rollup/rollup-openbsd-x64: '-'
+  rollup>@rollup/rollup-openharmony-arm64: '-'
   rollup>@rollup/rollup-win32-arm64-msvc: '-'
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
@@ -486,6 +486,9 @@ importers:
       babel-plugin-react-compiler:
         specifier: ^19.0.0-beta-e993439-20250117
         version: 19.0.0-beta-ebf51a3-20250411
+      create-launch:
+        specifier: 0.3.6
+        version: 0.3.6
       expo:
         specifier: ~57.0.22
         version: 57.0.22(@babel/core@7.29.0)(@expo/metro-runtime@57.0.15)(expo-router@57.0.21)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.1(@babel/core@7.29.0)(react-native@0.86.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -3117,6 +3120,10 @@ packages:
   create-jest@29.7.0:
     resolution: {integrity: sha512-Adz2bdH0Vq3F53KEMJOoftQFutWCukm6J24wbPWRO4k1kMY7gS7ds/uoJkNuV8wDCtWWnuwGcJwpWcih+zEW1Q==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
+    hasBin: true
+
+  create-launch@0.3.6:
+    resolution: {integrity: sha512-520gwkm1KJu/hY/HlbOXtINBWgfJbe0R1zmjyQx1wusUerB2e2KbAajovKD2RXXYgdha3iQf2TcEtfjY39S6BQ==}
     hasBin: true
 
   cross-fetch@3.2.0:
@@ -9457,6 +9464,8 @@ snapshots:
       - babel-plugin-macros
       - supports-color
       - ts-node
+
+  create-launch@0.3.6: {}
 
   cross-fetch@3.2.0:
     dependencies:
