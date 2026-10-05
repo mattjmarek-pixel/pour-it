@@ -46,7 +46,14 @@ function getAppName() {
 }
 
 function serveManifest(platform, res) {
-  const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
+  if (platform !== "ios" && platform !== "android") {
+    res.writeHead(400);
+    res.end("Invalid platform");
+    return;
+  }
+  const manifestPath = platform === "ios"
+    ? path.join(STATIC_ROOT, "ios", "manifest.json")
+    : path.join(STATIC_ROOT, "android", "manifest.json");
 
   if (!fs.existsSync(manifestPath)) {
     res.writeHead(404, { "content-type": "application/json" });
@@ -69,23 +76,43 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
   const forwardedProto = req.headers["x-forwarded-proto"];
   const protocol = forwardedProto || "https";
   const host = req.headers["x-forwarded-host"] || req.headers["host"];
+  // This value appears in both an HTML attribute and an inline script.
+  if (typeof host !== "string" || !/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(host)) {
+    res.writeHead(400);
+    res.end("Invalid host");
+    return;
+  }
   const baseUrl = `${protocol}://${host}`;
   const expsUrl = `${host}`;
 
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
     .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
-    .replace(/APP_NAME_PLACEHOLDER/g, appName);
+    .replace(/APP_NAME_PLACEHOLDER/g, () => appName.replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]));
 
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   res.end(html);
 }
 
 function serveStaticFile(urlPath, res) {
-  const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const filePath = path.join(STATIC_ROOT, safePath);
-
-  if (!filePath.startsWith(STATIC_ROOT)) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    res.writeHead(400);
+    res.end("Invalid path");
+    return;
+  }
+  if (decoded.includes("\0") || decoded.includes("\\") ||
+      decoded.split("/").some((part) => part.startsWith("."))) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+  let filePath = path.resolve(STATIC_ROOT, "." + decoded);
+  if (!filePath.startsWith(STATIC_ROOT + path.sep)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -94,6 +121,13 @@ function serveStaticFile(urlPath, res) {
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
     res.writeHead(404);
     res.end("Not Found");
+    return;
+  }
+  filePath = fs.realpathSync(filePath);
+  if (!filePath.startsWith(fs.realpathSync(STATIC_ROOT) + path.sep) ||
+      /\.(?:pem|key|p12|pfx|keystore|jks)$/i.test(filePath)) {
+    res.writeHead(403);
+    res.end("Forbidden");
     return;
   }
 
@@ -108,7 +142,14 @@ const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 const appName = getAppName();
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", `http://${req.headers.host}`);
+  let url;
+  try {
+    url = new URL(req.url || "/", "http://localhost");
+  } catch {
+    res.writeHead(400);
+    res.end("Invalid URL");
+    return;
+  }
   let pathname = url.pathname;
 
   if (basePath && pathname.startsWith(basePath)) {

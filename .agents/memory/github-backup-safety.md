@@ -9,3 +9,7 @@ Scan unpublished history, not only the latest working tree, before pushing. Keep
 GitHub connector access does not imply that shell Git authentication works.
 **Why:** The connector retained repository write access while Git's stored authentication failed.
 **How to apply:** Do not extract connector credentials. If using GitHub's Git database API instead, verify every uploaded blob, tree, and commit hash against local Git and update the branch with force disabled.
+
+For failures from Replit's managed Git askpass helper, use the account's Git Providers reconnection flow rather than reconnecting the app integration.
+**Why:** Official guidance distinguishes Git pane authentication from integration authentication; a working app integration did not repair the managed helper.
+**How to apply:** Ask the user to reconnect GitHub under Account settings → Git Providers, then verify ordinary Git with a dry-run push. Do not claim a successful integration request proves shell Git is repaired.

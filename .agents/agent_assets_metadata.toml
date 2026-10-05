@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "bqHM3rvOEEK6KIfBOpHGe"
@@ -24,3 +23,17 @@ id = "ZCs3Eo8AZe-_D9baPmE3r"
 uri = "file://artifacts/pour-it/assets/images/mocktail_hero.png"
 type = "image"
 title = "mocktail hero banner"
+
+[[outputs]]
+id = "0O0DY0k2ZGkRnU-ct0zPh"
+uri = "file://.local/pourit-security-review.txt"
+type = "text"
+title = "PourIt security review — commands and results"
+description = "Redacted command log, history and signing checks, fixes, remaining dependency findings, and the Git authentication blocker."
+logical_id = "be9624ab-e123-46a9-9515-c04ebcd6e360"
+content_hash = "sha256:43ed468d43d91ef76e71f97e9f1ee8c7787a729106a26c80894f67dc23a1800b"
+size = 8917
+mtime_ms = 1791204969561
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:9a481e92-87e4-4175-b9fc-d0413a885fcf/be9624ab-e123-46a9-9515-c04ebcd6e360/283d2cbb-5ab3-447a-971e-e78584495203"
+storage_version_token = "1791205018076342"
+content_type = "text/plain"
