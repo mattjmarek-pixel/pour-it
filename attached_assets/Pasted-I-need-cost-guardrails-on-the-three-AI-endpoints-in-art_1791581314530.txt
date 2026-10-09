@@ -1,0 +1,40 @@
+I need cost guardrails on the three AI endpoints in artifacts/api-server: /api/claude-stream, /api/identify-bottle, and /api/recipes/generate. Do not change any THC location gate or category gate logic. Only add the protections below.
+
+STEP 0 - INVESTIGATE FIRST, then continue:
+Report what image size and compression settings artifacts/pour-it/components/ScanView.tsx uses when it sends imageBase64 to /api/identify-bottle, and estimate the typical base64 payload size. Use that to set the identify body limit in step 1.
+
+1. Request body size limits:
+   - Lower the global express.json and urlencoded limit in app.ts from 10mb to 100kb.
+   - Give /api/identify-bottle its own larger limit, just big enough for the images from step 0 plus margin (no more than 8mb).
+
+2. Server-side input caps on /api/claude-stream. Return 400 with a clear error if any are exceeded:
+   - prompt: max 300 characters
+   - productName: max 120 characters
+   - recipe title, name, description: max 500 characters each
+   - recipe ingredients: max 30 items, each item's text max 200 characters
+   - recipe steps: max 30 items, each max 500 characters
+
+3. Lower max_tokens on /api/claude-stream from 8192 to 1200.
+
+4. Stop paying for abandoned requests:
+   - In /api/claude-stream, if the client disconnects before the stream finishes, abort the Anthropic stream immediately.
+   - In /api/identify-bottle and /api/recipes/generate, pass an AbortController signal to the Anthropic call and abort it if the client disconnects.
+
+5. Global daily AI call cap:
+   - Add a shared counter of Anthropic calls per UTC day across all three endpoints.
+   - Read the limit from an env var AI_DAILY_CALL_CAP, default 2000.
+   - When the cap is reached, return 503 with error "ai_capacity_reached" and do NOT call Anthropic. Fail closed: if the counter can't be read or the env value is invalid, use the default, never unlimited.
+   - Count the call before calling Anthropic, not after.
+   - Note in a code comment that this counter is per server instance (in memory), so it's an interim safety net, not exact billing control.
+
+6. Add tests for: each input cap rejecting oversized input, the 100kb global limit rejecting a large body on a non-identify route, the daily cap returning 503 once reached without calling Anthropic, and the stream being aborted when the client disconnects.
+
+VERIFICATION - paste raw output for each:
+a. Your step 0 findings.
+b. grep -n "limit" artifacts/api-server/src/app.ts artifacts/api-server/src/routes/*.ts
+c. grep -n "max_tokens" artifacts/api-server/src/routes/*.ts
+d. grep -rn "abort" artifacts/api-server/src/routes/
+e. grep -rn "AI_DAILY_CALL_CAP" artifacts/api-server/src/
+f. Run the full api-server test suite and paste the complete output with the pass/fail count.
+g. Break-it check: temporarily set the prompt cap to 100000, run the tests, and paste output showing the cap test FAILS. Revert it and paste output showing everything passes again.
+h. git diff --stat

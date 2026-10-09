@@ -11,6 +11,7 @@ import { resolveCatalogProduct } from "../data/catalog";
 import { verifyCategoryToken } from "../utils/categoryToken";
 import { verifyLocationToken } from "../utils/locationToken";
 import { getClientIp } from "../utils/clientIp";
+import { beginAiCall, customizationInputError } from "./aiGuards";
 
 const router = Router();
 
@@ -87,6 +88,12 @@ router.post("/claude-stream", async (req, res) => {
     return;
   }
 
+  const inputError = customizationInputError(recipe, prompt, productName);
+  if (inputError) {
+    res.status(400).json({ error: inputError });
+    return;
+  }
+
   if (mode === "thc") {
     const location = verifyLocationToken(locationToken, getClientIp(req));
     if (!location.ok) {
@@ -145,6 +152,8 @@ router.post("/claude-stream", async (req, res) => {
     return measure ? `${measure} ${ing.name ?? ""}`.trim() : (ing.name ?? "");
   });
 
+  const call = beginAiCall(req, res);
+  if (!call) return;
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("X-Accel-Buffering", "no");
@@ -166,7 +175,7 @@ Steps: ${(recipe.steps ?? []).join(" | ")}
 
     const stream = client.messages.stream({
       model: "claude-sonnet-4-6",
-      max_tokens: 8192,
+      max_tokens: 1200,
       system: buildCustomizationSystemPrompt(mode),
       messages: [
         {
@@ -174,23 +183,35 @@ Steps: ${(recipe.steps ?? []).join(" | ")}
           content: `Here is my recipe:\n\n${recipeContext}\n\nCustomization request: ${prompt}`,
         },
       ],
-    });
+    }, { signal: call.signal, maxRetries: 0 });
+    const abortStream = () => stream.abort();
+    call.signal.addEventListener("abort", abortStream, { once: true });
+    if (call.signal.aborted) abortStream();
 
-    for await (const event of stream) {
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
-        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+    try {
+      for await (const event of stream) {
+        if (call.signal.aborted) break;
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+        }
       }
+    } finally {
+      call.signal.removeEventListener("abort", abortStream);
     }
 
+    if (call.signal.aborted) return;
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (err) {
+    if (call.signal.aborted) return;
     req.log.error({ err }, "Claude stream error");
     res.write(`data: ${JSON.stringify({ error: "AI service unavailable" })}\n\n`);
     res.end();
+  } finally {
+    call.cleanup();
   }
 });
 

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { beginAiCall } from "./aiGuards";
 import { Router } from "express";
 import {
   catalogModeToProductCategory,
@@ -166,9 +167,12 @@ router.post("/generate", async (req, res) => {
   const system = buildRecipeSystemPrompt(category, existingRecipeTitles, qualityGateEnabled);
   const baseLabel = qualityGateEnabled ? "Mixer base" : "Product";
   const user = `${baseLabel}: ${verifiedProductName}\nProduct type: ${body.spiritType}\nFlavor notes: ${flavorNotes.join(", ") || "(unspecified)"}${verifiedPairingName ? `\nOptional ${category} pairing product: ${verifiedPairingName}` : ""}\n${qualityGateEnabled ? "Generate a recipe only when it is a strong pairing." : "Generate one creative recipe."}`;
+  const call = beginAiCall(req, res);
+  if (!call) return;
   try {
     const client = new Anthropic({ apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy", baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL });
-    const response = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: 1500, system, messages: [{ role: "user", content: user }] });
+    const response = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: 1500, system, messages: [{ role: "user", content: user }] }, { signal: call.signal, maxRetries: 0 });
+    if (call.signal.aborted) return;
     const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) { res.status(502).json({ error: "Invalid AI response" }); return; }
@@ -193,7 +197,10 @@ router.post("/generate", async (req, res) => {
     }
     res.json(parsed);
   } catch (err) {
+    if (call.signal.aborted) return;
     req.log.error({ err }, "AI recipe generation failed"); res.status(503).json({ error: "AI service unavailable" });
+  } finally {
+    call.cleanup();
   }
 });
 export default router;

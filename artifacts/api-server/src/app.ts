@@ -32,8 +32,13 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// ScanView captures full-resolution JPEGs with skipProcessing:true (quality
+// ignored). Estimated 2–5 MiB JPEG -> 2.7–6.7 MiB base64; 8 MiB allows margin.
+// Match the exact route so other endpoints cannot inherit the image allowance.
+app.post("/api/identify-bottle", express.json({ limit: "8mb" }),
+  express.urlencoded({ extended: true, limit: "8mb" }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 app.use("/api", router);
 

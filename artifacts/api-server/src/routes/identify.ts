@@ -12,6 +12,7 @@ import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
 import { signCategoryToken } from "../utils/categoryToken";
 import { verifyLocationToken } from "../utils/locationToken";
 import { getClientIp } from "../utils/clientIp";
+import { beginAiCall } from "./aiGuards";
 
 const router = Router();
 
@@ -85,9 +86,12 @@ Mode is "${mode}". Compatibility is mixer in all modes, spirits only in spirits,
 Known products:\n${productList || "(none provided)"}
 Return ONLY JSON: {"category":"spirits"|"thc"|"mixer"|"non_beverage"|"uncertain","confidence":"high"|"low","productId":string|null,"name":string|null,"brand":string|null,"recipes":[{"title":string,"description":string,"ingredients":[{"amount":string,"unit":string,"name":string}],"steps":[string],"tags":[string]}]}.
 For non_beverage, uncertain, low confidence, incompatible categories, or mixer categories, set recipes []. Mixer recipes are evaluated later by a separate quality gate. For compatible high-confidence unknown spirits or THC products give exactly 3 recipes.${thcRecipeSafety}`;
+  const call = beginAiCall(req, res);
+  if (!call) return;
   try {
     const client = new Anthropic({ apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy", baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL });
-    const response = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: 3000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } }, { type: "text", text: prompt }] }] });
+    const response = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: 3000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } }, { type: "text", text: prompt }] }] }, { signal: call.signal, maxRetries: 0 });
+    if (call.signal.aborted) return;
 
     const block = response.content.find((b) => b.type === "text");
     const raw = block?.type === "text" ? block.text : "";
@@ -154,7 +158,10 @@ For non_beverage, uncertain, low confidence, incompatible categories, or mixer c
     }
     res.json({ status: "not_found" } satisfies IdentifyResponse);
   } catch (err) {
+    if (call.signal.aborted) return;
     req.log.error({ err }, "Identify bottle error"); res.json({ status: "not_found" } satisfies IdentifyResponse);
+  } finally {
+    call.cleanup();
   }
 });
 export default router;
