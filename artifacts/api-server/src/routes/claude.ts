@@ -10,6 +10,7 @@ import {
 import { resolveCatalogProduct } from "../data/catalog";
 import { verifyCategoryToken } from "../utils/categoryToken";
 import { verifyLocationToken } from "../utils/locationToken";
+import { getClientIp } from "../utils/clientIp";
 
 const router = Router();
 
@@ -87,7 +88,7 @@ router.post("/claude-stream", async (req, res) => {
   }
 
   if (mode === "thc") {
-    const location = verifyLocationToken(locationToken);
+    const location = verifyLocationToken(locationToken, getClientIp(req));
     if (!location.ok) {
       res.status(403).json({
         error: "location_restricted",

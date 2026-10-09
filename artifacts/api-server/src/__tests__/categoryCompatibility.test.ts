@@ -88,7 +88,7 @@ describe("recipe quality and THC prompt safety", () => {
     create.mockResolvedValueOnce({ content: [{ type: "text", text: weak }] });
     const mixerInThc = await request(app).post("/api/recipes/generate").send({
       productId: "fresh-juices", productName: "Fresh Pressed Juices", spiritType: "juice", category: "thc",
-      pairingProductId: "wynk", pairingProductName: "Wynk Seltzer", locationToken: signLocationToken("IL"),
+      pairingProductId: "wynk", pairingProductName: "Wynk Seltzer", locationToken: signLocationToken("IL", "127.0.0.1"),
     });
     expect(mixerInThc.status).toBe(200);
     expect(mixerInThc.body.status).toBe("no_strong_pairing");

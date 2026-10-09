@@ -11,6 +11,7 @@ import {
 import { lookupCatalogById, lookupCatalogByName } from "../data/catalog";
 import { signCategoryToken } from "../utils/categoryToken";
 import { verifyLocationToken } from "../utils/locationToken";
+import { getClientIp } from "../utils/clientIp";
 
 const router = Router();
 
@@ -66,7 +67,7 @@ router.post("/identify-bottle", async (req, res) => {
   }
   // Keep this first THC-specific route gate fail-closed.
   if (mode === "thc") {
-    const loc = verifyLocationToken(locationToken);
+    const loc = verifyLocationToken(locationToken, getClientIp(req));
     if (!loc.ok) {
       req.log.warn({ reason: loc.reason }, "Blocked THC identify without valid location token");
       res.status(403).json({ error: "location_restricted", reason: loc.reason,
@@ -87,6 +88,7 @@ For non_beverage, uncertain, low confidence, incompatible categories, or mixer c
   try {
     const client = new Anthropic({ apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy", baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL });
     const response = await client.messages.create({ model: "claude-sonnet-4-6", max_tokens: 3000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } }, { type: "text", text: prompt }] }] });
+
     const block = response.content.find((b) => b.type === "text");
     const raw = block?.type === "text" ? block.text : "";
     let parsed: unknown;

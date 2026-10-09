@@ -6,6 +6,12 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// NOTE: `trust proxy` is deliberately left OFF. Trusting X-Forwarded-For
+// wholesale would let a caller spoof their address into the THC location
+// layer. Client IPs are instead derived by `getClientIp` (src/utils/clientIp),
+// which only honors the single forwarded hop appended by the trusted local
+// reverse proxy and ignores caller-supplied entries.
+
 app.use(
   pinoHttp({
     logger,

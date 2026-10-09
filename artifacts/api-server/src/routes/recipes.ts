@@ -11,6 +11,7 @@ import {
 import { resolveCatalogProduct } from "../data/catalog";
 import { verifyCategoryToken } from "../utils/categoryToken";
 import { verifyLocationToken } from "../utils/locationToken";
+import { getClientIp } from "../utils/clientIp";
 
 const router = Router();
 interface GenerateRequestBody {
@@ -80,7 +81,7 @@ router.post("/generate", async (req, res) => {
   }
   // This remains the first mode-specific safety gate and fails closed.
   if (category === "thc") {
-    const loc = verifyLocationToken(body.locationToken);
+    const loc = verifyLocationToken(body.locationToken, getClientIp(req));
     if (!loc.ok) {
       req.log.warn({ reason: loc.reason }, "Blocked THC recipe generation without valid location token");
       res.status(403).json({ error: "location_restricted", reason: loc.reason,
