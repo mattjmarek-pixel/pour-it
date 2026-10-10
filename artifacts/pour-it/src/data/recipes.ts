@@ -1,5 +1,5 @@
 export type AppMode = 'spirits' | 'thc' | 'mocktails';
-export type RecipeTier = 'canonical' | 'craft' | 'ai';
+export type RecipeTier = 'classic' | 'signature' | 'original' | 'ai';
 
 export interface RecipeIngredient {
   amount: string;
@@ -56,8 +56,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'svedka-midnight-martini',
-          title: 'Midnight Martini',
-          tier: 'canonical',
+          title: 'Vodka Martini',
+          tier: 'classic',
           description: "A bone-dry martini that lets Svedka's clean character shine.",
           tags: ['classic', 'elegant', 'dry'],
           ingredients: [
@@ -76,8 +76,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         },
         {
           id: 'svedka-golden-sunset-mule',
-          title: 'Golden Sunset Mule',
-          tier: 'craft',
+          title: 'Moscow Mule',
+          tier: 'classic',
           description: 'A crisp twist on the classic Moscow Mule with a golden citrus glow.',
           tags: ['refreshing', 'citrus', 'spicy'],
           ingredients: [
@@ -98,7 +98,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'svedka-berry-smash',
           title: 'Berry Smash',
-          tier: 'ai',
+          tier: 'original',
           description: 'Muddled summer berries meet smooth vodka in this vibrant crusher.',
           tags: ['fruity', 'summer', 'sweet'],
           ingredients: [
@@ -131,8 +131,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'captain-cola',
-          title: 'Cola Captain',
-          tier: 'canonical',
+          title: 'Rum & Cola',
+          tier: 'classic',
           description: 'The timeless Captain & Cola — elevated with a fresh lime squeeze.',
           tags: ['classic', 'simple', 'sweet'],
           ingredients: [
@@ -151,7 +151,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'captain-spiced-punch',
           title: 'Spiced Rum Punch',
-          tier: 'craft',
+          tier: 'original',
           description: "A crowd-pleasing tropical punch with the Captain's signature spice.",
           tags: ['tropical', 'fruity', 'party'],
           ingredients: [
@@ -172,7 +172,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'captain-dark-stormbreaker',
           title: 'Dark Stormbreaker',
-          tier: 'ai',
+          tier: 'original',
           description: 'Bold blackened rum meets fiery ginger in this modern dark storm.',
           tags: ['spicy', 'bold', 'ginger'],
           ingredients: [
@@ -205,7 +205,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'tanqueray-garden-tonic',
           title: 'Garden & Tonic',
-          tier: 'canonical',
+          tier: 'original',
           description: "Tanqueray's juniper notes sing alongside cool cucumber and herbal rosemary.",
           tags: ['botanical', 'refreshing', 'herbal'],
           ingredients: [
@@ -225,8 +225,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         },
         {
           id: 'tanqueray-negroni-bianco',
-          title: 'Negroni Bianco',
-          tier: 'craft',
+          title: 'Negroni',
+          tier: 'classic',
           description: "The perfect Negroni — Tanqueray's botanicals balance the Campari bite.",
           tags: ['bitter', 'stirred', 'elegant'],
           ingredients: [
@@ -246,7 +246,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'tanqueray-clover-club',
           title: 'Clover Club',
-          tier: 'ai',
+          tier: 'classic',
           description: 'A pre-Prohibition pink classic with silky foam and tart berry depth.',
           tags: ['classic', 'tart', 'silky'],
           ingredients: [
@@ -279,7 +279,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cuervo-classic-margarita',
           title: 'Classic Margarita',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'The king of all margaritas — simple, balanced, and utterly addictive.',
           tags: ['classic', 'citrus', 'salty'],
           ingredients: [
@@ -299,8 +299,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         },
         {
           id: 'cuervo-paloma-sunset',
-          title: 'Paloma Sunset',
-          tier: 'craft',
+          title: 'Paloma',
+          tier: 'classic',
           description: "Mexico's beloved tequila and grapefruit highball in its purest form.",
           tags: ['grapefruit', 'refreshing', 'fizzy'],
           ingredients: [
@@ -321,7 +321,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cuervo-tequila-sunrise',
           title: 'Tequila Sunrise',
-          tier: 'ai',
+          tier: 'classic',
           description: 'A classic sunrise cocktail with stunning gradient layers.',
           tags: ['fruity', 'visual', 'tropical'],
           ingredients: [
@@ -354,7 +354,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bulleit-old-fashioned',
           title: 'Old Fashioned',
-          tier: 'canonical',
+          tier: 'classic',
           description: "Bulleit's high-rye mash shines in bourbon's most iconic cocktail.",
           tags: ['classic', 'stirred', 'bold'],
           ingredients: [
@@ -375,7 +375,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bulleit-whiskey-sour',
           title: 'Whiskey Sour',
-          tier: 'craft',
+          tier: 'classic',
           description: "A silky sour with Bulleit's spice rounding out the bright lemon.",
           tags: ['sour', 'citrus', 'foamy'],
           ingredients: [
@@ -397,7 +397,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bulleit-mint-julep',
           title: 'Mint Julep',
-          tier: 'ai',
+          tier: 'classic',
           description: "Derby Day in a cup — Bulleit's bold rye meets cooling fresh mint.",
           tags: ['minty', 'southern', 'cold'],
           ingredients: [
@@ -412,7 +412,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
             'Add crushed ice, filling halfway.',
             'Pour Bulleit over ice.',
             'Top with more crushed ice to form a dome.',
-            'Garnish with mint sprig and dust with powdered sugar.',
+            'Garnish with mint sprig.',
           ],
         },
       ],
@@ -430,7 +430,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bacardi-classic-daiquiri',
           title: 'Classic Daiquiri',
-          tier: 'canonical',
+          tier: 'classic',
           description: "Pure and balanced — Bacardi's clean rum in its most perfect form.",
           tags: ['classic', 'citrus', 'tart'],
           ingredients: [
@@ -450,7 +450,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bacardi-mojito',
           title: 'Mojito',
-          tier: 'craft',
+          tier: 'classic',
           description: "Havana's gift to the world — mint, lime, and Bacardi in perfect harmony.",
           tags: ['minty', 'refreshing', 'fizzy'],
           ingredients: [
@@ -472,11 +472,11 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'bacardi-pina-colada',
           title: 'Piña Colada',
-          tier: 'ai',
+          tier: 'classic',
           description: 'A creamy tropical dream — Bacardi takes you straight to the beach.',
           tags: ['tropical', 'creamy', 'blended'],
           ingredients: [
-            ing('2', 'oz', 'Bacardi Coconut'),
+            ing('2', 'oz', 'Bacardi Superior'),
             ing('2', 'oz', 'pineapple juice'),
             ing('1.5', 'oz', 'coconut cream'),
             ing('1', 'cup', 'crushed ice'),
@@ -503,7 +503,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'grey-goose-vodka-martini',
           title: 'Vodka Martini',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'The crispest possible martini — Grey Goose at its purest.',
           tags: ['classic', 'dry', 'crisp'],
           ingredients: [
@@ -520,7 +520,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'grey-goose-le-fizz',
           title: 'Le Fizz',
-          tier: 'craft',
+          tier: 'signature',
           description: "Grey Goose's signature serve — elderflower, lime, and bubbles.",
           tags: ['floral', 'effervescent', 'elegant'],
           ingredients: [
@@ -551,8 +551,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'hendricks-classic-gt',
-          title: 'Cucumber Gin & Tonic',
-          tier: 'canonical',
+          title: "Hendrick's Gin & Tonic",
+          tier: 'signature',
           description: "Hendrick's signature serve — cucumber instead of lime.",
           tags: ['botanical', 'crisp', 'classic'],
           ingredients: [
@@ -571,7 +571,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'hendricks-rose-collins',
           title: 'Rose Collins',
-          tier: 'craft',
+          tier: 'original',
           description: 'A floral riff on the Tom Collins, perfumed with rose water.',
           tags: ['floral', 'long', 'refreshing'],
           ingredients: [
@@ -603,7 +603,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'diplomatico-rum-old-fashioned',
           title: 'Rum Old Fashioned',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'An aged rum twist on the iconic stirred classic.',
           tags: ['stirred', 'rich', 'bold'],
           ingredients: [
@@ -621,7 +621,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'diplomatico-jungle-bird',
           title: 'Jungle Bird',
-          tier: 'craft',
+          tier: 'classic',
           description: 'A tropical bittersweet sipper with Campari and pineapple.',
           tags: ['tropical', 'bitter', 'tiki'],
           ingredients: [
@@ -652,7 +652,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'don-julio-tommys-margarita',
           title: "Tommy's Margarita",
-          tier: 'canonical',
+          tier: 'classic',
           description: 'The agave-purist margarita: tequila, lime, agave nectar.',
           tags: ['classic', 'agave', 'sour'],
           ingredients: [
@@ -669,8 +669,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         },
         {
           id: 'don-julio-mezcal-paloma',
-          title: 'Don Julio Paloma',
-          tier: 'craft',
+          title: 'Paloma',
+          tier: 'classic',
           description: 'A crisp grapefruit highball with a salted rim.',
           tags: ['grapefruit', 'salty', 'long'],
           ingredients: [
@@ -702,7 +702,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'makers-manhattan',
           title: 'Manhattan',
-          tier: 'canonical',
+          tier: 'classic',
           description: "A polished Manhattan — Maker's wheat warmth meets sweet vermouth.",
           tags: ['stirred', 'classic', 'rich'],
           ingredients: [
@@ -720,7 +720,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'makers-paper-plane',
           title: 'Paper Plane',
-          tier: 'craft',
+          tier: 'classic',
           description: 'A modern equal-parts classic — bittersweet, citrus-bright.',
           tags: ['bitter', 'citrus', 'modern'],
           ingredients: [
@@ -748,7 +748,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'monkey-shoulder-highball',
           title: 'Scotch Highball',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'The most refreshing whisky drink ever — scotch, soda, citrus.',
           tags: ['highball', 'simple', 'refreshing'],
           ingredients: [
@@ -766,7 +766,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'monkey-shoulder-penicillin',
           title: 'Penicillin',
-          tier: 'craft',
+          tier: 'classic',
           description: 'A modern classic — ginger, honey, lemon, and a smoky float.',
           tags: ['smoky', 'spicy', 'modern'],
           ingredients: [
@@ -799,8 +799,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'wynk-citrus-float',
-          title: 'Wynk Citrus Float',
-          tier: 'canonical',
+          title: 'Wynk Citrus Twist',
+          tier: 'original',
           description: "A bright citrus sip that lets Wynk's microdose work its magic.",
           tags: ['citrus', 'bubbly', 'light'],
           ingredients: [
@@ -819,7 +819,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'wynk-berry-chill-spritz',
           title: 'Berry Chill Spritz',
-          tier: 'craft',
+          tier: 'original',
           description: "Muddled berries amplify Wynk's light berry notes for a mellow chill.",
           tags: ['berry', 'refreshing', 'mellow'],
           ingredients: [
@@ -838,7 +838,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'wynk-tropical-sunset-sip',
           title: 'Tropical Sunset Sip',
-          tier: 'ai',
+          tier: 'original',
           description: "Tropical mango meets Wynk's effervescence for a golden weekend vibe.",
           tags: ['tropical', 'smooth', 'social'],
           ingredients: [
@@ -868,7 +868,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cann-garden-party',
           title: 'Cann Garden Party',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Floral and serene — perfect for garden-party vibes with Cann.',
           tags: ['herbal', 'light', 'social'],
           ingredients: [
@@ -887,7 +887,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cann-grapefruit-fizz',
           title: 'Cann Grapefruit Fizz',
-          tier: 'craft',
+          tier: 'original',
           description: "Bright grapefruit and piney rosemary — Cann's social hour signature.",
           tags: ['citrus', 'fizzy', 'bright'],
           ingredients: [
@@ -906,7 +906,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cann-blood-orange-bliss',
           title: 'Cann Blood Orange Bliss',
-          tier: 'ai',
+          tier: 'original',
           description: 'Cardamom spice meets blood orange in this luxurious low-dose sip.',
           tags: ['citrus', 'mellow', 'vibrant'],
           ingredients: [
@@ -937,7 +937,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'delta9-bliss-lemonade',
           title: 'Bliss Lemonade',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Classic lemonade elevated with Delta 9 syrup — sunshine in a glass.',
           tags: ['lemony', 'sweet', 'elevated'],
           ingredients: [
@@ -956,7 +956,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'delta9-green-tea-lift',
           title: 'Green Tea Lift',
-          tier: 'craft',
+          tier: 'original',
           description: 'Earthy green tea and natural cannabis terpenes in a calming afternoon sip.',
           tags: ['earthy', 'calm', 'tea'],
           ingredients: [
@@ -977,7 +977,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'delta9-watermelon-wave',
           title: 'Watermelon Wave',
-          tier: 'ai',
+          tier: 'original',
           description: 'Watermelon and mint atop a gentle Delta 9 buzz — pure summer.',
           tags: ['fruity', 'summer', 'refreshing'],
           ingredients: [
@@ -1009,7 +1009,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'kiva-chill-chamomile',
           title: 'Chill Chamomile',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A relaxing chamomile cooler with a microdose lift.',
           tags: ['floral', 'calm', 'tea'],
           ingredients: [
@@ -1028,7 +1028,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'kiva-tropical-lift-punch',
           title: 'Tropical Lift Punch',
-          tier: 'craft',
+          tier: 'original',
           description: 'A tropical pineapple-passion punch with a mellow Kiva backbone.',
           tags: ['tropical', 'fruity', 'bright'],
           ingredients: [
@@ -1048,7 +1048,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'kiva-berry-zen-cooler',
           title: 'Berry Zen Cooler',
-          tier: 'ai',
+          tier: 'original',
           description: 'A peaceful berry highball with lavender and a Kiva microdose.',
           tags: ['berry', 'floral', 'calm'],
           ingredients: [
@@ -1079,7 +1079,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'keef-orange-crush',
           title: 'Keef Orange Crush',
-          tier: 'canonical',
+          tier: 'original',
           description: 'An orange crush highball with a kick from Keef sparkling.',
           tags: ['orange', 'bubbly', 'easy'],
           ingredients: [
@@ -1098,7 +1098,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'keef-raspberry-smash',
           title: 'Keef Raspberry Smash',
-          tier: 'craft',
+          tier: 'original',
           description: 'A muddled raspberry smash with Keef bubbles to lift it.',
           tags: ['berry', 'fizzy', 'smash'],
           ingredients: [
@@ -1117,7 +1117,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'keef-lemon-lift',
           title: 'Keef Lemon Lift',
-          tier: 'ai',
+          tier: 'original',
           description: 'A bright lemon-thyme highball with Keef bubbles.',
           tags: ['lemon', 'herbal', 'crisp'],
           ingredients: [
@@ -1147,7 +1147,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'olala-grape-fizz',
           title: 'Olala Grape Fizz',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A purple grape soda highball with bubbles and a subtle lift.',
           tags: ['grape', 'sweet', 'social'],
           ingredients: [
@@ -1166,7 +1166,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'olala-cherry-float',
           title: 'Olala Cherry Float',
-          tier: 'craft',
+          tier: 'original',
           description: 'Cherry soda with a vanilla ice cream float — diner-style lift.',
           tags: ['cherry', 'dessert', 'creamy'],
           ingredients: [
@@ -1183,7 +1183,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'olala-mango-burst',
           title: 'Olala Mango Burst',
-          tier: 'ai',
+          tier: 'original',
           description: 'A bright mango chili soda with a tajín-rimmed glass.',
           tags: ['mango', 'spicy', 'fruity'],
           ingredients: [
@@ -1213,7 +1213,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cycling-frog-classic-pour',
           title: 'Classic Pour',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Straight over ice with a lime wedge — the simplest serve.',
           tags: ['simple', 'crisp', 'easy'],
           ingredients: [
@@ -1230,7 +1230,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'cycling-frog-cucumber-cooler',
           title: 'Cucumber Cooler',
-          tier: 'craft',
+          tier: 'original',
           description: 'A spa-day style cooler with cucumber and mint.',
           tags: ['cucumber', 'herbal', 'refreshing'],
           ingredients: [
@@ -1260,7 +1260,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'artet-spritz',
           title: 'Artet Spritz',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Artet over ice with bubbles — the elegant low-dose aperitif.',
           tags: ['aperitif', 'bubbly', 'botanical'],
           ingredients: [
@@ -1278,7 +1278,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'artet-rosemary-tonic',
           title: 'Artet Rosemary Tonic',
-          tier: 'craft',
+          tier: 'original',
           description: 'A bittersweet G&T-style serve with rosemary aromatics.',
           tags: ['herbal', 'bittersweet', 'long'],
           ingredients: [
@@ -1307,7 +1307,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'wunder-on-ice',
           title: 'Higher Vibes on Ice',
-          tier: 'canonical',
+          tier: 'original',
           description: 'The simplest serve — Wunder over ice with a lime twist.',
           tags: ['simple', 'crisp', 'easy'],
           ingredients: [
@@ -1324,7 +1324,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'wunder-ginger-buck',
           title: 'Wunder Ginger Buck',
-          tier: 'craft',
+          tier: 'original',
           description: 'A ginger-lime buck made buzzy with Wunder.',
           tags: ['ginger', 'tart', 'bright'],
           ingredients: [
@@ -1353,7 +1353,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'pamos-paloma-style',
           title: 'Pamos Paloma',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A grapefruit paloma riff with Pamos as the base.',
           tags: ['grapefruit', 'fizzy', 'salty'],
           ingredients: [
@@ -1372,7 +1372,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'pamos-rosemary-fizz',
           title: 'Pamos Rosemary Fizz',
-          tier: 'craft',
+          tier: 'original',
           description: 'A piney-herbal sipper with rosemary and citrus.',
           tags: ['herbal', 'fizzy', 'aromatic'],
           ingredients: [
@@ -1402,7 +1402,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'sunmed-honey-lemon-soother',
           title: 'Honey Lemon Soother',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A warming honey-lemon CBD tonic for winding down.',
           tags: ['warm', 'soothing', 'honey'],
           ingredients: [
@@ -1421,7 +1421,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'sunmed-blueberry-night-cooler',
           title: 'Blueberry Night Cooler',
-          tier: 'craft',
+          tier: 'original',
           description: 'A chilled blueberry-lavender cooler with CBD.',
           tags: ['berry', 'floral', 'calm'],
           ingredients: [
@@ -1452,7 +1452,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'mad-lilly-hibiscus-cooler',
           title: 'Hibiscus Cooler',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A tart hibiscus cooler with a measured Mad Lilly dose.',
           tags: ['floral', 'tart', 'pink'],
           ingredients: [
@@ -1470,7 +1470,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'mad-lilly-strawberry-basil',
           title: 'Strawberry Basil Smash',
-          tier: 'craft',
+          tier: 'original',
           description: 'Muddled strawberry-basil smash with a low-dose lift.',
           tags: ['strawberry', 'herbal', 'smash'],
           ingredients: [
@@ -1504,8 +1504,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'seedlip-spice-spritz',
-          title: 'Spice Garden Spritz',
-          tier: 'canonical',
+          title: 'Seedlip Spice & Tonic',
+          tier: 'signature',
           description: 'A warming aromatic spritz built around Seedlip Spice 94.',
           tags: ['warming', 'aromatic', 'long'],
           ingredients: [
@@ -1524,7 +1524,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'seedlip-dark-spicy-zero',
           title: 'Dark & Spicy Zero',
-          tier: 'craft',
+          tier: 'original',
           description: 'A zero-proof riff on the Dark & Stormy with deep ginger heat.',
           tags: ['ginger', 'spicy', 'bold'],
           ingredients: [
@@ -1544,13 +1544,13 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'seedlip-negroni',
           title: 'Seedlip Negroni',
-          tier: 'ai',
+          tier: 'classic',
           description: 'A zero-proof Negroni with all the bitter complexity intact.',
           tags: ['bitter', 'stirred', 'sophisticated'],
           ingredients: [
             ing('1', 'oz', 'Seedlip Spice 94'),
             ing('1', 'oz', 'Aecorn Bitter (non-alcoholic)'),
-            ing('1', 'oz', 'Lyre\'s Italian Orange (non-alcoholic)'),
+            ing('1', 'oz', "Lyre's Aperitif Rosso (non-alcoholic sweet vermouth)"),
             garnish('Orange peel'),
             garnish('Large ice cube'),
           ],
@@ -1575,12 +1575,13 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'fevertree-elderflower-fizz',
           title: 'Elderflower Fizz',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Delicate floral notes in perfect effervescent harmony.',
           tags: ['floral', 'effervescent', 'elegant'],
           ingredients: [
             ing('5', 'oz', 'Fever-Tree Elderflower Tonic'),
-            ing('1', 'oz', 'elderflower cordial'),
+            ing('0.5', 'oz', 'elderflower cordial'),
+            ing('0.5', 'oz', 'fresh lemon juice'),
             ing('2', '', 'cucumber slices'),
             garnish('Lemon twist'),
             garnish('Ice'),
@@ -1588,7 +1589,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
           steps: [
             'Muddle cucumber in glass.',
             'Fill with ice.',
-            'Add elderflower cordial.',
+            'Add elderflower cordial and fresh lemon juice.',
             'Top with Fever-Tree Elderflower Tonic.',
             'Garnish with lemon twist.',
           ],
@@ -1596,7 +1597,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'fevertree-ginger-lime-cooler',
           title: 'Ginger & Lime Cooler',
-          tier: 'craft',
+          tier: 'original',
           description: 'Premium ginger meets fresh lime for the ultimate zero-proof cooler.',
           tags: ['ginger', 'lime', 'refreshing'],
           ingredients: [
@@ -1616,7 +1617,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'fevertree-pink-grapefruit-tonic',
           title: 'Pink Grapefruit Tonic',
-          tier: 'ai',
+          tier: 'original',
           description: 'Pink grapefruit double-down — tart, complex, and totally gorgeous.',
           tags: ['grapefruit', 'pink', 'bitter'],
           ingredients: [
@@ -1646,7 +1647,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'lyres-dry-martini',
           title: "Lyre's Dry Martini",
-          tier: 'canonical',
+          tier: 'classic',
           description: "A flawless zero-proof martini — Lyre's non-alc spirits nail the classic.",
           tags: ['classic', 'dry', 'elegant'],
           ingredients: [
@@ -1665,7 +1666,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'lyres-amaretto-sour',
           title: "Lyre's Amaretto Sour",
-          tier: 'craft',
+          tier: 'classic',
           description: "Lyre's Amaretti creates a creamy zero-proof sour with real depth.",
           tags: ['nutty', 'sour', 'frothy'],
           ingredients: [
@@ -1685,7 +1686,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'lyres-espresso-martini',
           title: "Lyre's Espresso Martini",
-          tier: 'ai',
+          tier: 'classic',
           description: "Lyre's channels the classic espresso martini without a drop of alcohol.",
           tags: ['coffee', 'bold', 'evening'],
           ingredients: [
@@ -1715,7 +1716,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'monin-lavender-lemonade',
           title: 'Lavender Lemonade',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Provence in a glass — Monin lavender elevates simple lemonade.',
           tags: ['floral', 'lemon', 'soothing'],
           ingredients: [
@@ -1735,18 +1736,19 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'monin-hibiscus-rose-cooler',
           title: 'Hibiscus Rose Cooler',
-          tier: 'craft',
+          tier: 'original',
           description: 'Hibiscus and rose in effervescent harmony — stunning and zero-proof.',
           tags: ['floral', 'tart', 'pink'],
           ingredients: [
-            ing('1', 'oz', 'Monin Hibiscus Syrup'),
-            ing('0.5', 'oz', 'Monin Rose Syrup'),
+            ing('0.75', 'oz', 'Monin Hibiscus Syrup'),
+            ing('0.25', 'oz', 'Monin Rose Syrup'),
+            ing('0.5', 'oz', 'fresh lime juice'),
             ing('5', 'oz', 'sparkling water'),
             garnish('Rose petals (edible)'),
             garnish('Ice'),
           ],
           steps: [
-            'Combine syrups in glass over ice.',
+            'Combine syrups and fresh lime juice in glass over ice.',
             'Top with sparkling water.',
             'Stir once gently.',
             'Garnish with rose petals.',
@@ -1755,11 +1757,11 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'monin-passion-fruit-fizz',
           title: 'Passion Fruit Fizz',
-          tier: 'ai',
+          tier: 'original',
           description: "Tropical passion fruit with Monin's quality syrup in a tangy fizz.",
           tags: ['tropical', 'tart', 'vibrant'],
           ingredients: [
-            ing('1.5', 'oz', 'Monin Passion Fruit Syrup'),
+            ing('0.75', 'oz', 'Monin Passion Fruit Syrup'),
             ing('1', 'oz', 'lime juice'),
             ing('4', 'oz', 'ginger ale'),
             garnish('Passion fruit half'),
@@ -1785,14 +1787,14 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
       recipes: [
         {
           id: 'fresh-sunrise-detox',
-          title: 'Sunrise Detox',
-          tier: 'canonical',
+          title: 'Sunrise Refresher',
+          tier: 'original',
           description: 'A vibrant vitamin bomb to start your morning glowing.',
           tags: ['detox', 'vitamin', 'morning'],
           ingredients: [
             ing('3', 'oz', 'fresh orange juice'),
             ing('2', 'oz', 'fresh carrot juice'),
-            ing('1', 'oz', 'fresh ginger juice'),
+            ing('0.25', 'oz', 'fresh ginger juice'),
             garnish('Turmeric pinch'),
             garnish('Ice'),
           ],
@@ -1807,7 +1809,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'fresh-watermelon-basil-crush',
           title: 'Watermelon Basil Crush',
-          tier: 'craft',
+          tier: 'original',
           description: 'Watermelon and basil — summer in a glass with a salty surprise.',
           tags: ['watermelon', 'herbal', 'summer'],
           ingredients: [
@@ -1828,7 +1830,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'fresh-green-goddess',
           title: 'Green Goddess',
-          tier: 'ai',
+          tier: 'original',
           description: 'Pure green goodness — a refreshing reset in every sip.',
           tags: ['green', 'veggie', 'fresh'],
           ingredients: [
@@ -1861,13 +1863,13 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'sparkling-italian-mineral-spritz',
           title: 'Italian Mineral Spritz',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Elegant simplicity — premium sparkling water elevated with herbs.',
           tags: ['light', 'refreshing', 'simple'],
           ingredients: [
             ing('6', 'oz', 'premium sparkling mineral water'),
             ing('2', '', 'slices cucumber'),
-            garnish('Sprig fresh dill'),
+            garnish('Sprig fresh rosemary'),
             garnish('Squeeze lemon'),
             garnish('Ice'),
           ],
@@ -1875,24 +1877,25 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
             'Add cucumber to glass.',
             'Fill with ice.',
             'Pour sparkling water.',
-            'Squeeze lemon, add dill.',
+            'Squeeze lemon, add rosemary.',
           ],
         },
         {
           id: 'sparkling-raspberry-rose',
           title: 'Raspberry Rose Sparkle',
-          tier: 'craft',
+          tier: 'original',
           description: 'Rose-kissed raspberry bubbles — zero-proof luxury at its finest.',
           tags: ['berry', 'floral', 'elegant'],
           ingredients: [
             ing('6', 'oz', 'sparkling water'),
             ing('4', '', 'fresh raspberries'),
-            ing('0.5', 'oz', 'rose water'),
+            ing('2', 'dashes', 'rose water'),
+            ing('0.5', 'oz', 'simple syrup'),
             garnish('Edible rose petals'),
             garnish('Ice'),
           ],
           steps: [
-            'Muddle raspberries in glass.',
+            'Muddle raspberries with simple syrup in glass.',
             'Add ice.',
             'Add rose water.',
             'Top with sparkling water.',
@@ -1901,8 +1904,8 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         },
         {
           id: 'sparkling-citrus-mint-cooler',
-          title: 'Citrus Mint Cooler',
-          tier: 'ai',
+          title: 'Virgin Mojito',
+          tier: 'classic',
           description: 'The ultimate zero-proof cooler — mint and citrus in sparkling bliss.',
           tags: ['citrus', 'minty', 'cooling'],
           ingredients: [
@@ -1933,13 +1936,13 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'ritual-old-fashioned',
           title: 'Zero Proof Old Fashioned',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'All the warmth of an old fashioned without the alcohol.',
           tags: ['stirred', 'warm', 'classic'],
           ingredients: [
             ing('2', 'oz', 'Ritual Zero Proof Whiskey'),
             ing('1', 'tsp', 'demerara syrup'),
-            ing('2', 'dashes', 'aromatic bitters (low-ABV)'),
+            ing('2', 'dashes', 'non-alcoholic aromatic bitters'),
             garnish('Orange peel'),
           ],
           steps: [
@@ -1951,7 +1954,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'ritual-zero-sour',
           title: 'Zero Proof Whiskey Sour',
-          tier: 'craft',
+          tier: 'classic',
           description: 'A frothy, citrus-forward sour with zero alcohol.',
           tags: ['sour', 'frothy', 'citrus'],
           ingredients: [
@@ -1982,7 +1985,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'aplos-arise-spritz',
           title: 'Aplós Arise Spritz',
-          tier: 'canonical',
+          tier: 'original',
           description: 'A bright spritz designed to gently lift the mood.',
           tags: ['spritz', 'bright', 'functional'],
           ingredients: [
@@ -2001,7 +2004,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'aplos-grapefruit-sage',
           title: 'Grapefruit Sage Highball',
-          tier: 'craft',
+          tier: 'original',
           description: 'Adaptogenic citrus highball with sage aromatics.',
           tags: ['herbal', 'grapefruit', 'long'],
           ingredients: [
@@ -2031,13 +2034,13 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'free-spirits-zero-manhattan',
           title: 'Zero Proof Manhattan',
-          tier: 'canonical',
+          tier: 'classic',
           description: 'A polished zero-proof Manhattan with surprising depth.',
           tags: ['stirred', 'classic', 'sophisticated'],
           ingredients: [
             ing('2', 'oz', 'Free Spirits Bourbon'),
             ing('1', 'oz', 'non-alcoholic sweet vermouth'),
-            ing('2', 'dashes', 'aromatic bitters'),
+            ing('2', 'dashes', 'non-alcoholic aromatic bitters'),
             garnish('Brandied cherry'),
           ],
           steps: [
@@ -2049,7 +2052,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'free-spirits-mint-julep-zero',
           title: 'Zero Proof Mint Julep',
-          tier: 'craft',
+          tier: 'classic',
           description: 'Crushed ice, mint, and zero-proof bourbon — derby vibes.',
           tags: ['minty', 'southern', 'cold'],
           ingredients: [
@@ -2080,24 +2083,24 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'ghia-spritz',
           title: 'Ghia Spritz',
-          tier: 'canonical',
+          tier: 'signature',
           description: "Ghia's signature serve — bittersweet, fizzy, no booze.",
           tags: ['aperitif', 'bittersweet', 'effervescent'],
           ingredients: [
             ing('2', 'oz', 'Ghia Apéritif'),
             ing('3', 'oz', 'sparkling water'),
-            garnish('Orange wheel'),
+            garnish('Rosemary sprig and orange zest'),
           ],
           steps: [
             'Fill a wine glass with ice.',
             'Add Ghia and top with sparkling water.',
-            'Garnish with orange wheel.',
+            'Garnish with rosemary sprig and orange zest.',
           ],
         },
         {
           id: 'ghia-mediterranean-tonic',
           title: 'Mediterranean Tonic',
-          tier: 'craft',
+          tier: 'original',
           description: 'A botanical Ghia & tonic with rosemary and citrus.',
           tags: ['herbal', 'long', 'aromatic'],
           ingredients: [
@@ -2127,7 +2130,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'proxies-by-the-glass',
           title: 'Proxies By The Glass',
-          tier: 'canonical',
+          tier: 'original',
           description: 'Chilled, in a wine glass, the way it was meant to be enjoyed.',
           tags: ['simple', 'pairing', 'elegant'],
           ingredients: [
@@ -2143,7 +2146,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'proxies-aperol-style-spritz',
           title: 'Proxies Sunset Spritz',
-          tier: 'craft',
+          tier: 'original',
           description: 'A wine-alternative spritz with citrus and bubbles.',
           tags: ['spritz', 'bright', 'social'],
           ingredients: [
@@ -2173,7 +2176,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'kin-high-rhode-pour',
           title: 'High Rhode Over Ice',
-          tier: 'canonical',
+          tier: 'original',
           description: "Kin's signature serve, straight over ice with citrus.",
           tags: ['simple', 'functional', 'easy'],
           ingredients: [
@@ -2190,7 +2193,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
         {
           id: 'kin-evening-spritz',
           title: 'Kin Evening Spritz',
-          tier: 'craft',
+          tier: 'original',
           description: 'A relaxing Kin spritz with bubbles and a hint of citrus.',
           tags: ['spritz', 'relaxing', 'aromatic'],
           ingredients: [
@@ -2200,7 +2203,7 @@ export const PRODUCTS: Record<AppMode, Product[]> = {
             garnish('Lemon twist'),
           ],
           steps: [
-            'Fill a coupe with ice.',
+            'Fill a wine glass with ice.',
             'Add Kin and lemon juice.',
             'Top with sparkling water.',
             'Garnish with a lemon twist.',

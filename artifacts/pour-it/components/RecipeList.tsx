@@ -28,23 +28,26 @@ if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
-const TIER_ORDER: Record<RecipeTier, number> = { canonical: 0, craft: 1, ai: 2 };
+const TIER_ORDER: Record<RecipeTier, number> = { classic: 0, signature: 1, original: 2, ai: 3 };
 
 const TIER_LABELS: Record<RecipeTier, string> = {
-  canonical: 'CLASSIC',
-  craft: 'CRAFT',
-  ai: 'AI',
+  classic: 'CLASSIC',
+  signature: 'SIGNATURE',
+  original: 'ORIGINAL',
+  ai: 'AI CREATION',
 };
 
 const TIER_STYLES: Record<RecipeTier, { backgroundColor: string; borderColor: string }> = {
-  canonical: { backgroundColor: 'rgba(212,168,67,0.15)', borderColor: 'rgba(212,168,67,0.3)' },
-  craft: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)' },
+  classic: { backgroundColor: 'rgba(212,168,67,0.15)', borderColor: 'rgba(212,168,67,0.3)' },
+  signature: { backgroundColor: 'rgba(212,168,67,0.15)', borderColor: 'rgba(212,168,67,0.3)' },
+  original: { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)' },
   ai: { backgroundColor: 'rgba(124,58,237,0.15)', borderColor: 'rgba(124,58,237,0.3)' },
 };
 
 const TIER_COLORS: Record<RecipeTier, string> = {
-  canonical: '#D4A843',
-  craft: '#9CA3AF',
+  classic: '#D4A843',
+  signature: '#D4A843',
+  original: '#9CA3AF',
   ai: '#7C3AED',
 };
 

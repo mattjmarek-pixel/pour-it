@@ -2,7 +2,7 @@ import { PRODUCTS, CATEGORIES } from '../data/recipes';
 import type { AppMode, RecipeTier } from '../data/recipes';
 
 const MODES: AppMode[] = ['spirits', 'thc', 'mocktails'];
-const VALID_TIERS: RecipeTier[] = ['canonical', 'craft', 'ai'];
+const VALID_TIERS: RecipeTier[] = ['classic', 'signature', 'original', 'ai'];
 
 describe('PRODUCTS data integrity', () => {
   it('contains all 3 modes', () => {
@@ -100,11 +100,10 @@ describe('PRODUCTS data integrity', () => {
     }
   });
 
-  it('every product has at least one canonical recipe', () => {
+  it('every product has at least one built-in recipe', () => {
     for (const mode of MODES) {
       for (const product of PRODUCTS[mode]) {
-        const canonical = product.recipes.filter((r) => r.tier === 'canonical');
-        expect(canonical.length).toBeGreaterThanOrEqual(1);
+        expect(product.recipes.length).toBeGreaterThanOrEqual(1);
       }
     }
   });

@@ -51,7 +51,7 @@ describe('migrateRecipe', () => {
     const migrated = migrateRecipe(legacy);
     expect(migrated).toBeTruthy();
     expect(migrated?.title).toBe('Golden Sunset Mule');
-    expect(migrated?.tier).toBe('craft');
+    expect(migrated?.tier).toBe('original');
     expect(migrated?.ingredients).toEqual([
       { amount: '2', unit: 'oz', name: 'Svedka Vodka' },
       { amount: '', unit: '', name: 'Lime wheel' },
@@ -65,14 +65,14 @@ describe('migrateRecipe', () => {
       id: 'r1',
       title: 'New Recipe',
       description: 'Tasty',
-      tier: 'canonical',
+      tier: 'classic',
       ingredients: [{ amount: '1', unit: 'oz', name: 'gin' }],
       steps: ['Stir.'],
       tags: ['classic'],
     };
     const migrated = migrateRecipe(modern);
     expect(migrated?.title).toBe('New Recipe');
-    expect(migrated?.tier).toBe('canonical');
+    expect(migrated?.tier).toBe('classic');
   });
 
   it('rejects recipes without an id', () => {
@@ -99,7 +99,7 @@ describe('migrateSavedRecipe', () => {
     const migrated = migrateSavedRecipe(legacy);
     expect(migrated).toBeTruthy();
     expect(migrated?.recipe.title).toBe('Old Recipe');
-    expect(migrated?.recipe.tier).toBe('craft');
+    expect(migrated?.recipe.tier).toBe('original');
     expect(migrated?.product.spiritType).toBe('');
     expect(migrated?.product.flavorNotes).toEqual([]);
     expect(migrated?.mode).toBe('spirits');

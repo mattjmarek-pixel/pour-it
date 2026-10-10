@@ -19,18 +19,24 @@ import type { AppMode, Product, Recipe, RecipeTier } from "@/src/data/recipes";
 import { safeImpact } from "@/utils/haptics";
 
 const TIER_LABELS: Record<RecipeTier, string> = {
-  canonical: "CLASSIC",
-  craft: "CRAFT",
-  ai: "AI",
+  classic: "CLASSIC",
+  signature: "SIGNATURE",
+  original: "ORIGINAL",
+  ai: "AI CREATION",
 };
 
 const TIER_STYLES: Record<RecipeTier, { backgroundColor: string; borderColor: string; color: string }> = {
-  canonical: {
+  classic: {
     backgroundColor: "rgba(212,168,67,0.15)",
     borderColor: "rgba(212,168,67,0.3)",
     color: "#D4A843",
   },
-  craft: {
+  signature: {
+    backgroundColor: "rgba(212,168,67,0.15)",
+    borderColor: "rgba(212,168,67,0.3)",
+    color: "#D4A843",
+  },
+  original: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderColor: "rgba(255,255,255,0.1)",
     color: "#9CA3AF",

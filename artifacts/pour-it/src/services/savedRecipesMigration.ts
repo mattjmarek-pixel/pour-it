@@ -5,6 +5,7 @@ import type {
   Product,
   AppMode,
 } from '@/src/data/recipes';
+import { PRODUCTS } from '@/src/data/recipes';
 
 export interface SavedRecipeShape {
   recipe: Recipe;
@@ -13,7 +14,11 @@ export interface SavedRecipeShape {
   savedAt: number;
 }
 
-const VALID_TIERS: ReadonlySet<RecipeTier> = new Set(['canonical', 'craft', 'ai']);
+const VALID_TIERS: ReadonlySet<RecipeTier> = new Set(['classic', 'signature', 'original', 'ai']);
+const BUILT_IN_RECIPES = new Map(
+  Object.values(PRODUCTS).flatMap(products =>
+    products.flatMap(product => product.recipes.map(recipe => [recipe.id, recipe] as const))),
+);
 
 export function parseLegacyIngredient(raw: unknown): RecipeIngredient | null {
   if (raw == null) return null;
@@ -46,15 +51,18 @@ export function migrateRecipe(raw: unknown): Recipe | null {
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== 'string' || !r.id) return null;
 
-  const title =
+  const builtIn = BUILT_IN_RECIPES.get(r.id);
+  const title = builtIn?.title ||
     (typeof r.title === 'string' && r.title) ||
     (typeof r.name === 'string' && r.name) ||
     'Untitled';
   const description = typeof r.description === 'string' ? r.description : '';
-  const tier: RecipeTier =
+  // Built-in identity wins over stale labels, including formerly AI-labeled
+  // catalog recipes. Unmatched canonical/craft saves become original.
+  const tier: RecipeTier = builtIn?.tier ?? (
     typeof r.tier === 'string' && VALID_TIERS.has(r.tier as RecipeTier)
       ? (r.tier as RecipeTier)
-      : 'craft';
+      : 'original');
 
   const ingredients: RecipeIngredient[] = Array.isArray(r.ingredients)
     ? (r.ingredients.map(parseLegacyIngredient).filter(Boolean) as RecipeIngredient[])
