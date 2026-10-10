@@ -10,6 +10,10 @@ GitHub connector access does not imply that shell Git authentication works.
 **Why:** The connector retained repository write access while Git's stored authentication failed.
 **How to apply:** Do not extract connector credentials. If using GitHub's Git database API instead, verify every uploaded blob, tree, and commit hash against local Git and update the branch with force disabled.
 
+A ref read immediately after a successful GitHub API update can still return the previous commit.
+**Why:** A post-update Git-ref read returned the old SHA while a separate branch read confirmed the new commit and tree. Do not assume a stale read means the write failed.
+**How to apply:** Verify via the branch endpoint with cache bypass and compare both commit and tree against local Git before reporting success. Do not repeat the write merely because the first read is stale.
+
 For failures from Replit's managed Git askpass helper, use the account's Git Providers reconnection flow rather than reconnecting the app integration.
 **Why:** Official guidance distinguishes Git pane authentication from integration authentication; a working app integration did not repair the managed helper.
 **How to apply:** Ask the user to reconnect GitHub under Account settings → Git Providers, then verify ordinary Git with a dry-run push. Do not claim a successful integration request proves shell Git is repaired.
