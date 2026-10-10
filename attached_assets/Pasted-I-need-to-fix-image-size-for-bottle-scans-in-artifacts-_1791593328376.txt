@@ -1,0 +1,26 @@
+I need to fix image size for bottle scans in artifacts/pour-it. Do not change any THC gate, category gate, or AI vision allowance logic.
+
+Problem: ScanView.tsx calls takePictureAsync with skipProcessing: true, which discards the quality setting, so full-size photos are sent to /api/identify-bottle. These can exceed the server's 8MB identify limit and Anthropic's image size limit.
+
+STEP 0 - INVESTIGATE FIRST, then continue:
+a. Check whether expo-image-manipulator is already installed in artifacts/pour-it. If not, install the version that matches the project's Expo SDK.
+b. Check whether any other path sends images to /api/identify-bottle (for example, photos picked from the library with expo-image-picker). List every path you find.
+
+FIX:
+1. For every path from step 0b, before sending, resize the image so its longest side is at most 1568 pixels, keeping the aspect ratio, and save it as JPEG at compress 0.7 with base64 output. Do not upscale images that are already smaller.
+2. Put this in one shared helper function used by all paths, not copied in each place.
+3. Keep skipProcessing as is if it helps capture speed, since the resize now handles size.
+4. If resizing fails, do not send the original full-size image. Show the user the existing scan error state.
+5. After resizing, if the base64 string is still over 4.5MB, do not send it. Show the scan error state.
+6. Make sure the media type sent matches JPEG.
+7. Add tests for the helper: a large image gets resized to max 1568 on the longest side, a small image is not upscaled, a resize failure does not send anything, and an oversized result is blocked.
+
+VERIFICATION - paste raw output for each:
+a. Your step 0 findings.
+b. grep -rn "manipulate\|ImageManipulator" artifacts/pour-it --include=*.ts --include=*.tsx | grep -v node_modules
+c. grep -rn "identify-bottle" artifacts/pour-it --include=*.ts --include=*.tsx | grep -v node_modules
+d. Run the full pour-it test suite and paste the complete output with the pass/fail count.
+e. Break-it check: temporarily change the max side from 1568 to 10000, run the tests, and paste output showing the resize test FAILS. Revert and paste output showing everything passes.
+f. Scan a real bottle on your phone and report the base64 size that was sent (log it once in dev only, then remove the log).
+g. git diff --stat
+Then push to GitHub.
