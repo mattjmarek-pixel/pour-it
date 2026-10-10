@@ -4,6 +4,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockTakePicture = jest.fn();
+const capturedPhoto = { uri: 'file:///capture.jpg', width: 4032, height: 3024 };
+const mockResize = jest.fn();
+const mockSaveImage = jest.fn();
+const mockRenderImage = jest.fn();
+const mockToastProps: { message?: string; visible?: boolean } = {};
+jest.mock('expo-image-manipulator', () => ({
+  ImageManipulator: {
+    manipulate: () => ({ resize: mockResize, renderAsync: mockRenderImage, release: jest.fn() }),
+  },
+  SaveFormat: { JPEG: 'jpeg' },
+}));
 const mockFetch = jest.fn();
 const mockOnProductFound = jest.fn();
 const mockCameraProps: { onBarcodeScanned?: (result: { data: string }) => void } = {};
@@ -80,7 +91,12 @@ jest.mock('@/components/CrossCategoryWarningModal', () => ({
   CrossCategoryWarningModal: () => null,
 }));
 jest.mock('@/components/EmptyState', () => ({ EmptyState: () => null }));
-jest.mock('@/components/ScanToast', () => ({ ScanToast: () => null }));
+jest.mock('@/components/ScanToast', () => ({
+  ScanToast: (props: { message: string; visible: boolean }) => {
+    Object.assign(mockToastProps, props);
+    return null;
+  },
+}));
 jest.mock('@/components/AIVisionQuotaModal', () => ({
   AIVisionQuotaModal: (props: { issue?: string }) => {
     Object.assign(mockQuotaProps, props);
@@ -136,7 +152,14 @@ describe('ScanView AI allowance integration', () => {
     storage.clear();
     jest.clearAllMocks();
     mockTakePicture.mockReset();
+    mockSaveImage.mockReset().mockResolvedValue({
+      width: 1568, height: 1176, base64: 'resized-jpeg',
+    });
+    mockRenderImage.mockReset().mockResolvedValue({
+      saveAsync: mockSaveImage, release: jest.fn(),
+    });
     mockFetch.mockReset();
+    (global as { fetch?: unknown }).fetch = mockFetch;
     mockOnProductFound.mockReset();
     (AsyncStorage.getItem as jest.Mock)
       .mockReset()
@@ -206,7 +229,7 @@ describe('ScanView AI allowance integration', () => {
   });
 
   it('does not commit or callback when the response resolves after unmount', async () => {
-    mockTakePicture.mockResolvedValueOnce({ base64: 'captured-image' });
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
     const response = deferred<{ ok: boolean; json: () => Promise<unknown> }>();
     mockFetch.mockReturnValueOnce(response.promise);
     (global as { fetch?: unknown }).fetch = mockFetch;
@@ -234,7 +257,7 @@ describe('ScanView AI allowance integration', () => {
   });
 
   it('does not forward a product when the allowance commit write fails', async () => {
-    mockTakePicture.mockResolvedValueOnce({ base64: 'captured-image' });
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -273,7 +296,7 @@ describe('ScanView AI allowance integration', () => {
   });
 
   it('charges a successful unknown-barcode AI fallback and forwards the product', async () => {
-    mockTakePicture.mockResolvedValueOnce({ base64: 'captured-image' });
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -302,7 +325,7 @@ describe('ScanView AI allowance integration', () => {
   });
 
   it('releases the reservation when the fallback is uncertain', async () => {
-    mockTakePicture.mockResolvedValueOnce({ base64: 'captured-image' });
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ status: 'uncertain' }),
@@ -319,5 +342,59 @@ describe('ScanView AI allowance integration', () => {
     expect(mockOnProductFound).not.toHaveBeenCalled();
     expect(storage.has('ai_vision_usage:v1')).toBe(false);
     await act(async () => renderer.unmount());
+  });
+  it.each(['resize failure', 'oversized result'])('does not send or charge on %s and shows the existing scan error', async failure => {
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
+    if (failure === 'resize failure') {
+      mockRenderImage.mockRejectedValueOnce(new Error('Native conversion failed'));
+    } else {
+      mockSaveImage.mockResolvedValueOnce({
+        width: 1568, height: 1176, base64: 'A'.repeat(4_500_001),
+      });
+    }
+    const renderer = await renderScanner();
+    await act(async () => {
+      mockCameraProps.onBarcodeScanned?.({ data: 'unknown-barcode' });
+    });
+    await flushScan();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockOnProductFound).not.toHaveBeenCalled();
+    expect(storage.has('ai_vision_usage:v1')).toBe(false);
+    expect(mockToastProps).toMatchObject({
+      visible: true, message: 'Product not found — try browsing manually',
+    });
+    await act(async () => renderer.unmount());
+  });
+
+  it('sends only the prepared JPEG rather than the original camera payload', async () => {
+    mockTakePicture.mockResolvedValueOnce({ ...capturedPhoto, base64: 'original-full-size' });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'uncertain' }) });
+    const renderer = await renderScanner();
+    await act(async () => {
+      mockCameraProps.onBarcodeScanned?.({ data: 'unknown-barcode' });
+    });
+    await flushScan();
+    expect(mockResize).toHaveBeenCalledWith({ width: 1568 });
+    expect(mockSaveImage).toHaveBeenCalledWith({ format: 'jpeg', compress: 0.7, base64: true });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).imageBase64).toBe('resized-jpeg');
+    await act(async () => renderer.unmount());
+  });
+
+  it('does not send when resizing finishes after unmount', async () => {
+    mockTakePicture.mockResolvedValueOnce(capturedPhoto);
+    const render = deferred<{ saveAsync: typeof mockSaveImage; release: () => void }>();
+    mockRenderImage.mockReturnValueOnce(render.promise);
+    const renderer = await renderScanner();
+    await act(async () => {
+      mockCameraProps.onBarcodeScanned?.({ data: 'unknown-barcode' });
+    });
+    await flushScan();
+    expect(mockRenderImage).toHaveBeenCalledTimes(1);
+    await act(async () => renderer.unmount());
+    render.resolve({ saveAsync: mockSaveImage, release: jest.fn() });
+    await flushScan();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(storage.has('ai_vision_usage:v1')).toBe(false);
   });
 });

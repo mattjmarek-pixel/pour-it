@@ -71,6 +71,7 @@
     "@workspace/category-policy": "workspace:*",
     "@workspace/thc-legal-states": "workspace:*",
     "expo-camera": "^57.0.5",
+    "expo-image-manipulator": "~57.0.21",
     "stacktrace-parser": "^0.1.11"
   }
 }

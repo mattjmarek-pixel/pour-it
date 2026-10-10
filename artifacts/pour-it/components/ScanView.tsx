@@ -49,6 +49,7 @@ import {
   type VisionAllowanceAttempt,
 } from '@/src/services/scanUsage';
 import { upsertMyBarProduct } from '@/src/services/myBarStorage';
+import { prepareScanImage } from '@/src/services/prepareScanImage';
 import { safeNotification } from '@/utils/haptics';
 
 interface ScanViewProps {
@@ -300,16 +301,19 @@ export function ScanView({
       if (!isAttemptActive()) return;
       const photo = await deadline.run(
         cameraRef.current.takePictureAsync({
-          base64: true,
-          quality: 0.5,
           skipProcessing: true,
         })
       );
       if (!isAttemptActive()) return;
-      if (!photo?.base64) {
+      if (!photo?.uri) {
         showToast('Product not found — try browsing manually', 2400);
         return;
       }
+      // Keep capture, resize and upload within the existing scan deadline.
+      // A failed/oversized conversion throws into the existing error state;
+      // never fall back to uploading the original full-resolution image.
+      const imageBase64 = await deadline.run(prepareScanImage(photo));
+      if (!isAttemptActive()) return;
 
       // Identification is always checked against every known product. The
       // active mode controls compatibility and recipes, never catalog safety.
@@ -323,7 +327,7 @@ export function ScanView({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            imageBase64: photo.base64,
+            imageBase64,
             products: hints,
             mode,
             // Server-side THC geo-enforcement: THC identification is rejected
